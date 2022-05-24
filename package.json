@@ -1,0 +1,10 @@
+{
+  "name": "compoundor-js",
+  "version": "1.0.0",
+  "description": "simple implementation of an auto-compounder bot",
+  "main": "index.js",
+  "dependencies": {
+    "dotenv": "^16.0.1",
+    "ethers": "^5.5.4"
+  }
+}
