@@ -16,7 +16,7 @@ const minGainCostPercent = BigNumber.from(180) // when gains / cost >= 180% do a
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 
-const wethAddress = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+const wethAddress = process.env.NETWORK == "polygon" ? "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270" : "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
 const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL)
@@ -106,7 +106,7 @@ async function getTokenETHPricesX96(position, cache) {
 }
 
 async function getTokenETHPriceX96(address) {
-    if (address == wethAddress) {
+    if (address.toLowerCase() == wethAddress.toLowerCase()) {
         return BigNumber.from(2).pow(96);
     }
     
@@ -168,13 +168,13 @@ async function autoCompoundPositions() {
                 continue;
             }
 
-            const deadline = (await provider.getBlock("latest")).timestamp + 300 //Math.floor(new Date().getTime() / 1000) + 300
-            console.log(deadline)
-            const [bonus0, bonus1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline })
-            const gasCost = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline })
-            
+            const deadline = Math.floor(new Date().getTime() / 1000) + 100
+
             // update gas price to latest
             gasPrice = await provider.getGasPrice()
+
+            const [bonus0, bonus1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline }, { gasPrice })
+            const gasCost = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline }, { gasPrice })
 
             const cost = gasPrice.mul(gasCost)
 
@@ -186,9 +186,9 @@ async function autoCompoundPositions() {
             const gains = gain0.add(gain1)
 
             if (isReady(gains, cost)) {
-                const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline })
+                const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline }, { gasPrice })
                 console.log("Autocompounded position", nftId, tx)
-                updateTrackedPosition(nftId, 0, cost)
+                updateTrackedPosition(nftId, BigNumber.from(0), cost)
             } else {
                 updateTrackedPosition(nftId, gains, cost)
             }
