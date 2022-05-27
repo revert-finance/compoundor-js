@@ -1,15 +1,15 @@
 require('dotenv').config()
-
 const ethers = require("ethers");
+const axios = require('axios');
 
 const BigNumber = ethers.BigNumber;
 
-const CONTRACT_RAW = require("./contracts/Contract.json")
+const CONTRACT_RAW = require("./contracts/Compoundor.json")
 const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
-const checkInterval = 5000 // quick check each 5 secs
+const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
 const minGainCostPercent = BigNumber.from(180) // when gains / cost >= 180% do autocompound - before reaching 200%
 
@@ -29,43 +29,45 @@ const signer = new ethers.Wallet(process.env.COMPOUNDER_PRIVATE_KEY, provider)
 
 const trackedPositions = {}
 
+async function getPositions() {
+    const result = await axios.post(process.env.GRAPH_API_URL, {
+        query: "{ tokens(where: { account_not: null }) { id } }" 
+    })
+    return result.data.data.tokens.map(t => parseInt(t.id, 10))    
+}
+
 async function trackPositions() {
-    const depositedFilter = contract.filters.TokenDeposited()
-    const withdrawnFilter = contract.filters.TokenWithdrawn()
 
-    const deposited = await contract.queryFilter(depositedFilter)
-    const withdrawn = await contract.queryFilter(withdrawnFilter)
-
-    const logs = deposited.concat(withdrawn)
-    logs.sort((a, b) => a.blockNumber - b.blockNumber)
-
-    for (const log of logs) {
-        if (log.event == "TokenDeposited") {
-            await addTrackedPosition(log.args.tokenId)
-        } else {
-            await removeTrackedPosition(log.args.tokenId)
-        }
+    // get active positions from the graph
+    const tokenIds = await getPositions()
+    for (const tokenId of tokenIds) {
+        await addTrackedPosition(tokenId) 
     }
 
     // setup ws listeners
+    const depositedFilter = contract.filters.TokenDeposited()
+    const withdrawnFilter = contract.filters.TokenWithdrawn()
+
     wsProvider.on(depositedFilter, async (...args) => {
         const event = args[args.length - 1]
         const log = contract.interface.parseLog(event)
-        await addTrackedPosition(log.args.tokenId)
+        await addTrackedPosition(log.args.tokenId.toNumber())
     })
     wsProvider.on(withdrawnFilter, async (...args) => {
         const event = args[args.length - 1]
         const log = contract.interface.parseLog(event)
-        await removeTrackedPosition(log.args.tokenId)
+        await removeTrackedPosition(log.args.tokenId.toNumber())
     })
 }
 
 async function addTrackedPosition(nftId) {
+    console.log("Add tracked position", nftId)
     const position = await npm.positions(nftId)
     trackedPositions[nftId] = { nftId, token0: position.token0, token1: position.token1, fee: position.fee }
 }
 
 async function removeTrackedPosition(nftId) {
+    console.log("Removed tracked position", nftId)
     delete trackedPositions[nftId]
 }
 
