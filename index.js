@@ -12,6 +12,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
 const minGainCostPercent = BigNumber.from(180) // when gains / cost >= 180% do autocompound - before reaching 200%
+const maxGasLimit = BigNumber.from(1000000) // double max expected value
 
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
@@ -150,8 +151,37 @@ function needsCheck(trackedPosition, gasPrice) {
     return false;
 }
 
+async function calculateCostAndGains(nftId, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96, deadline) {
+
+    try {
+        const gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap, deadline }, { gasPrice })
+
+        // to high cost - skip
+        if (gasLimit.gt(maxGasLimit)) {
+            console.log("Autocompound position gas cost exceeded max", nftId, gasLimit.toString())
+            return { error: true }
+        }
+
+        const [bonus0, bonus1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap, deadline }, { gasPrice, gasLimit })
+
+        const cost = gasPrice.mul(gasLimit)
+
+        const gain0 = bonus0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))
+        const gain1 = bonus1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96))
+
+        const gains = gain0.add(gain1)
+
+        return { gains, cost, gasLimit, doSwap }
+    } catch (err) {
+        console.log("Autocompound position calc err", nftId, doSwap)
+        return { error: true }
+    }
+}
+
 async function autoCompoundPositions() {
     
+    // TODO remove deadline once deployed
+
     const tokenPriceCache = {}
 
     try {
@@ -172,25 +202,29 @@ async function autoCompoundPositions() {
 
             // update gas price to latest
             gasPrice = await provider.getGasPrice()
-
-            const [bonus0, bonus1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline }, { gasPrice })
-            const gasCost = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline }, { gasPrice })
-
-            const cost = gasPrice.mul(gasCost)
-
             const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
-            const gain0 = bonus0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))
-            const gain1 = bonus1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96))
-        
-            const gains = gain0.add(gain1)
+            // try with and without swap
+            const resultA = await calculateCostAndGains(nftId, true, gasPrice, tokenPrice0X96, tokenPrice1X96, deadline)
+            const resultB = await calculateCostAndGains(nftId, false, gasPrice, tokenPrice0X96, tokenPrice1X96, deadline)
 
-            if (isReady(gains, cost)) {
-                const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: true, deadline }, { gasPrice })
-                console.log("Autocompounded position", nftId, tx)
-                updateTrackedPosition(nftId, BigNumber.from(0), cost)
-            } else {
-                updateTrackedPosition(nftId, gains, cost)
+            let result = null
+            if (!resultA.error && !resultB.error) {
+                result = resultA.gains.sub(resultA.cost).gt(resultB.gains.sub(resultB.cost)) ? resultA : resultB
+            } else if (!resultA.error) {
+                result = resultA
+            } else if (!resultB.error) {
+                result = resultB
+            }
+
+            if (result) {
+                if (isReady(result.gains, result.cost)) {
+                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: result.doSwap, deadline }, { gasPrice, gasLimit: result.gasLimit })
+                    console.log("Autocompounded position", nftId, tx)
+                    updateTrackedPosition(nftId, BigNumber.from(0), result.cost)
+                } else {
+                    updateTrackedPosition(nftId, result.gains, result.cost)
+                }
             }
         }
     } catch (err) {
