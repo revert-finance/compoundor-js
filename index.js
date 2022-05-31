@@ -154,7 +154,10 @@ function needsCheck(trackedPosition, gasPrice) {
 async function calculateCostAndGains(nftId, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96, deadline) {
 
     try {
-        const gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap, deadline }, { gasPrice })
+        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap, deadline }, { gasPrice })
+
+        // add 10% to gas limit to be safe
+        gasLimit = gasLimit.mul(11).div(10)
 
         // to high cost - skip
         if (gasLimit.gt(maxGasLimit)) {
