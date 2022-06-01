@@ -11,7 +11,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
-const minGainCostPercent = BigNumber.from(180) // when gains / cost >= 180% do autocompound - before reaching 200%
+const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
 const maxGasLimit = BigNumber.from(1000000) // double max expected value
 
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
@@ -221,6 +221,9 @@ async function autoCompoundPositions() {
             }
 
             if (result) {
+
+                console.log(nftId, result.gains.mul(100).div(result.cost) + "%")
+
                 if (isReady(result.gains, result.cost)) {
                     const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion: 0, withdrawBonus: false, doSwap: result.doSwap, deadline }, { gasPrice, gasLimit: result.gasLimit })
                     console.log("Autocompounded position", nftId, tx)
