@@ -2,6 +2,7 @@ require('dotenv').config()
 const ethers = require("ethers");
 const axios = require('axios');
 
+
 const BigNumber = ethers.BigNumber;
 
 const CONTRACT_RAW = require("./contracts/Compoundor.json")
@@ -17,20 +18,61 @@ const maxGasLimit = BigNumber.from(1000000) // double max expected value
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 
-// polygon and mainnet config
-const nativeTokenAddress = process.env.NETWORK == "polygon" ? "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270" : "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-const wethAddress = process.env.NETWORK == "polygon" ? "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619" : "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2"
-const usdcAddress = process.env.NETWORK == "polygon" ? "0x2791bca1f2de4661ed88a30c99a7a9449aa84174" : "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
-const usdtAddress = process.env.NETWORK == "polygon" ? "0xc2132d05d31c914a87c6611c10748aeb04b58e8f" : "0xdac17f958d2ee523a2206206994597c13d831ec7"
-const daiAddress = process.env.NETWORK == "polygon" ? "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063" : "0x6B175474E89094C44Da98b954EedeAC495271d0F"
+const nativeTokenAddresses = {
+    "mainnet" : "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "polygon" : "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+    "optimism" : "0x4200000000000000000000000000000000000006",
+    "arbitrum" : "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+}
+const wethAddresses = {
+    "mainnet" : "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "polygon" : "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
+    "optimism" : "0x4200000000000000000000000000000000000006",
+    "arbitrum" : "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+}
+const usdcAddresses = {
+    "mainnet" : "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "polygon" : "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+    "optimism" : "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
+    "arbitrum" : "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"
+}
+const usdtAddresses = {
+    "mainnet" : "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "polygon" : "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+    "optimism" : "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",
+    "arbitrum" : "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"
+}
+const daiAddresses = {
+    "mainnet" : "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+    "polygon" : "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
+    "optimism" : "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+    "arbitrum" : "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
+}
+
+const network = process.env.NETWORK
+const nativeTokenAddress = nativeTokenAddresses[network]
 
 // order for bonus token preference 
-const preferedBonusToken = [nativeTokenAddress, wethAddress, usdcAddress, usdtAddress, daiAddress]
+const preferedBonusToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
 
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
+
+// special gas price handling for polygon
+if (network === "polygon") {
+    const { createGetGasPrice } = require('./lib/polygongastracker');
+    provider.getGasPrice = createGetGasPrice('rapid') 
+}
+
 const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL)
 
-const contract = new ethers.Contract(process.env.CONTRACT_ADDRESS, CONTRACT_RAW.abi, provider)
+const contractAddresses = {
+    "mainnet" : "",
+    "polygon" : "0x7f48e62386C51880415EF814b9abfddf3ee5fDe0",
+    "optimism" : "",
+    "arbitrum" : ""
+}
+
+const contract = new ethers.Contract(contractAddresses[network], CONTRACT_RAW.abi, provider)
 const factory = new ethers.Contract(factoryAddress, FACTORY_RAW.abi, provider)
 const npm = new ethers.Contract(npmAddress, NPM_RAW.abi, provider)
 
@@ -38,8 +80,10 @@ const signer = new ethers.Wallet(process.env.COMPOUNDER_PRIVATE_KEY, provider)
 
 const trackedPositions = {}
 
+const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-" + network
+
 async function getPositions() {
-    const result = await axios.post(process.env.GRAPH_API_URL, {
+    const result = await axios.post(graphApiUrl, {
         query: "{ tokens(where: { account_not: null }) { id } }" 
     })
     return result.data.data.tokens.map(t => parseInt(t.id, 10))    
@@ -159,10 +203,10 @@ function needsCheck(trackedPosition, gasPrice) {
     return false;
 }
 
-async function calculateCostAndGains(nftId, bonusConversion, withdrawBonus, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96, deadline) {
+async function calculateCostAndGains(nftId, bonusConversion, withdrawBonus, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96) {
 
     try {
-        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion, withdrawBonus, doSwap, deadline }, { gasPrice })
+        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion, withdrawBonus, doSwap }, { gasPrice })
 
         // add 10% to gas limit to be safe
         gasLimit = gasLimit.mul(11).div(10)
@@ -173,7 +217,7 @@ async function calculateCostAndGains(nftId, bonusConversion, withdrawBonus, doSw
             return { error: true }
         }
 
-        const [bonus0, bonus1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, bonusConversion, withdrawBonus, doSwap, deadline }, { gasPrice, gasLimit })
+        const [bonus0, bonus1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, bonusConversion, withdrawBonus, doSwap }, { gasPrice, gasLimit })
 
         const cost = gasPrice.mul(gasLimit)
 
@@ -184,14 +228,13 @@ async function calculateCostAndGains(nftId, bonusConversion, withdrawBonus, doSw
 
         return { gains, cost, gasLimit, doSwap }
     } catch (err) {
+        console.log(err)
         console.log("Autocompound position calc err", nftId, doSwap)
         return { error: true }
     }
 }
 
 async function autoCompoundPositions() {
-    
-    // TODO remove deadline once deployed
 
     const tokenPriceCache = {}
 
@@ -209,8 +252,6 @@ async function autoCompoundPositions() {
                 continue;
             }
 
-            const deadline = Math.floor(new Date().getTime() / 1000) + 100
-
             // update gas price to latest
             gasPrice = await provider.getGasPrice()
             const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
@@ -222,11 +263,9 @@ async function autoCompoundPositions() {
             const bonusConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
             const withdrawBonus = true
 
-            console.log(trackedPosition.token0, trackedPosition.token1, bonusConversion)
-
             // try with and without swap
-            const resultA = await calculateCostAndGains(nftId, bonusConversion, withdrawBonus, true, gasPrice, tokenPrice0X96, tokenPrice1X96, deadline)
-            const resultB = await calculateCostAndGains(nftId, bonusConversion, withdrawBonus, false, gasPrice, tokenPrice0X96, tokenPrice1X96, deadline)
+            const resultA = await calculateCostAndGains(nftId, bonusConversion, withdrawBonus, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
+            const resultB = await calculateCostAndGains(nftId, bonusConversion, withdrawBonus, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
 
             let result = null
             if (!resultA.error && !resultB.error) {
@@ -239,11 +278,11 @@ async function autoCompoundPositions() {
 
             if (result) {
 
-                console.log(nftId, result.gains.mul(100).div(result.cost) + "%")
+                console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
 
                 if (isReady(result.gains, result.cost)) {
-                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion, withdrawBonus, doSwap: result.doSwap, deadline }, { gasPrice, gasLimit: result.gasLimit })
-                    console.log("Autocompounded position", nftId, tx)
+                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion, withdrawBonus, doSwap: result.doSwap }, { gasPrice, gasLimit: result.gasLimit })
+                    console.log("Autocompounded position", nftId, tx.hash)
                     updateTrackedPosition(nftId, BigNumber.from(0), result.cost)
                 } else {
                     updateTrackedPosition(nftId, result.gains, result.cost)
