@@ -67,7 +67,7 @@ const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL)
 
 const contractAddresses = {
     "mainnet" : "",
-    "polygon" : "0x7f48e62386C51880415EF814b9abfddf3ee5fDe0",
+    "polygon" : "0xe3159fc9E26B76De780D7fA1282c438548Ba4E09",
     "optimism" : "",
     "arbitrum" : ""
 }
