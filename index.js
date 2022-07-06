@@ -52,8 +52,8 @@ const daiAddresses = {
 const network = process.env.NETWORK
 const nativeTokenAddress = nativeTokenAddresses[network]
 
-// order for bonus token preference 
-const preferedBonusToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
+// order for reward token preference 
+const preferedRewardToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
 
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
 
@@ -203,10 +203,10 @@ function needsCheck(trackedPosition, gasPrice) {
     return false;
 }
 
-async function calculateCostAndGains(nftId, bonusConversion, withdrawBonus, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96) {
+async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96) {
 
     try {
-        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, bonusConversion, withdrawBonus, doSwap }, { gasPrice })
+        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasPrice })
 
         // add 10% to gas limit to be safe
         gasLimit = gasLimit.mul(11).div(10)
@@ -217,12 +217,12 @@ async function calculateCostAndGains(nftId, bonusConversion, withdrawBonus, doSw
             return { error: true }
         }
 
-        const [bonus0, bonus1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, bonusConversion, withdrawBonus, doSwap }, { gasPrice, gasLimit })
+        const [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasPrice, gasLimit })
 
         const cost = gasPrice.mul(gasLimit)
 
-        const gain0 = bonus0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))
-        const gain1 = bonus1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96))
+        const gain0 = reward0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))
+        const gain1 = reward1.mul(tokenPrice1X96).div(BigNumber.from(2).pow(96))
 
         const gains = gain0.add(gain1)
 
@@ -256,16 +256,16 @@ async function autoCompoundPositions() {
             gasPrice = await provider.getGasPrice()
             const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
-            const indexOf0 = preferedBonusToken.indexOf(trackedPosition.token0)
-            const indexOf1 = preferedBonusToken.indexOf(trackedPosition.token1)
+            const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
+            const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1)
 
             // if none prefered token found - keep original tokens - otherwise convert to first one in list
-            const bonusConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
-            const withdrawBonus = true
+            const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
+            const withdrawReward = true
 
             // try with and without swap
-            const resultA = await calculateCostAndGains(nftId, bonusConversion, withdrawBonus, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
-            const resultB = await calculateCostAndGains(nftId, bonusConversion, withdrawBonus, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
+            const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
+            const resultB = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
 
             let result = null
             if (!resultA.error && !resultB.error) {
@@ -281,7 +281,7 @@ async function autoCompoundPositions() {
                 console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
 
                 if (isReady(result.gains, result.cost)) {
-                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, bonusConversion, withdrawBonus, doSwap: result.doSwap }, { gasPrice, gasLimit: result.gasLimit })
+                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, { gasPrice, gasLimit: result.gasLimit })
                     console.log("Autocompounded position", nftId, tx.hash)
                     updateTrackedPosition(nftId, BigNumber.from(0), result.cost)
                 } else {
