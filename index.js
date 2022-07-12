@@ -66,10 +66,10 @@ if (network === "polygon") {
 const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL)
 
 const contractAddresses = {
-    "mainnet" : "",
-    "polygon" : "0xe3159fc9E26B76De780D7fA1282c438548Ba4E09",
-    "optimism" : "",
-    "arbitrum" : ""
+    "mainnet" : "0x98ec492942090364ac0736ef1a741ae6c92ec790",
+    "polygon" : "0x406fc1e51d1f3affceaee64724f627d0933f8d2b",
+    "optimism" : "0x98eC492942090364AC0736Ef1A741AE6C92ec790",
+    "arbitrum" : "0x98ec492942090364ac0736ef1a741ae6c92ec790"
 }
 
 const contract = new ethers.Contract(contractAddresses[network], CONTRACT_RAW.abi, provider)
