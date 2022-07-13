@@ -13,7 +13,8 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
 const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
-const maxGasLimit = BigNumber.from(1000000) // double max expected value
+const maxGasLimit = BigNumber.from(1000000)
+const maxGasLimitArbitrum = BigNumber.from(2000000)
 
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
@@ -56,6 +57,7 @@ const nativeTokenAddress = nativeTokenAddresses[network]
 const preferedRewardToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
 
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
+const mainnetProvider = new ethers.providers.JsonRpcProvider(process.env.MAINNET_RPC_URL)
 
 // special gas price handling for polygon
 if (network === "polygon") {
@@ -65,14 +67,9 @@ if (network === "polygon") {
 
 const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL)
 
-const contractAddresses = {
-    "mainnet" : "0x98ec492942090364ac0736ef1a741ae6c92ec790",
-    "polygon" : "0x406fc1e51d1f3affceaee64724f627d0933f8d2b",
-    "optimism" : "0x98eC492942090364AC0736Ef1A741AE6C92ec790",
-    "arbitrum" : "0x98ec492942090364ac0736ef1a741ae6c92ec790"
-}
+const contractAddress = "0x98ec492942090364ac0736ef1a741ae6c92ec790"
 
-const contract = new ethers.Contract(contractAddresses[network], CONTRACT_RAW.abi, provider)
+const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
 const factory = new ethers.Contract(factoryAddress, FACTORY_RAW.abi, provider)
 const npm = new ethers.Contract(npmAddress, NPM_RAW.abi, provider)
 
@@ -212,7 +209,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
         gasLimit = gasLimit.mul(11).div(10)
 
         // to high cost - skip
-        if (gasLimit.gt(maxGasLimit)) {
+        if (network !== "arbitrum" && gasLimit.gt(maxGasLimit) || network === "arbitrum" && gasLimit.gt(maxGasLimitArbitrum)) {
             console.log("Autocompound position gas cost exceeded max", nftId, gasLimit.toString())
             return { error: true }
         }
@@ -234,13 +231,19 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
     }
 }
 
+async function getGasPrice() {
+    if (network == "optimism") {
+        return (await mainnetProvider.getGasPrice()).div(89) // optimism estimation - for autocompound call
+    }
+    return await provider.getGasPrice()
+}
+
 async function autoCompoundPositions() {
 
     const tokenPriceCache = {}
 
     try {
-
-        let gasPrice = await provider.getGasPrice()
+        let gasPrice = await getGasPrice()
 
         console.log("Current gas price", gasPrice.toString())
 
@@ -253,7 +256,7 @@ async function autoCompoundPositions() {
             }
 
             // update gas price to latest
-            gasPrice = await provider.getGasPrice()
+            gasPrice = await getGasPrice()
             const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
             const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
@@ -266,6 +269,7 @@ async function autoCompoundPositions() {
             // try with and without swap
             const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
             const resultB = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
+
 
             let result = null
             if (!resultA.error && !resultB.error) {
@@ -281,7 +285,16 @@ async function autoCompoundPositions() {
                 console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
 
                 if (isReady(result.gains, result.cost)) {
-                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, { gasPrice, gasLimit: result.gasLimit })
+                    const params = { gasLimit: result.gasLimit }
+                    if (network == "mainnet") {
+                        // mainnet EIP-1559 handling
+                        const feeData = await provider.getFeeData()
+                        params.maxFeePerGas = feeData.maxFeePerGas
+                        params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
+                    } else {
+                        params.gasPrice = gasPrice
+                    }
+                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
                     console.log("Autocompounded position", nftId, tx.hash)
                     updateTrackedPosition(nftId, BigNumber.from(0), result.cost)
                 } else {
