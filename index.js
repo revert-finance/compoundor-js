@@ -13,6 +13,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
 const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
+const defaultGasLimit = 500000
 const maxGasLimit = BigNumber.from(1000000)
 const maxGasLimitArbitrum = BigNumber.from(2000000)
 
@@ -167,7 +168,9 @@ async function getTokenETHPriceX96(address) {
             const poolContract = new ethers.Contract(poolAddress, POOL_RAW.abi, provider)
             const isToken1WETH = (await poolContract.token1()).toLowerCase() == nativeTokenAddress.toLowerCase();
             const slot0 = await poolContract.slot0()
-            return isToken1WETH ? slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96)) : BigNumber.from(2).pow(192 + 96).div(slot0.sqrtPriceX96.pow(2))
+            if (slot0.sqrtPriceX96.gt(0)) {
+                return isToken1WETH ? slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96)) : BigNumber.from(2).pow(192 + 96).div(slot0.sqrtPriceX96.pow(2))
+            }
         }
     }
 
@@ -203,19 +206,28 @@ function needsCheck(trackedPosition, gasPrice) {
 async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96) {
 
     try {
-        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap })
+        let gasLimit = defaultGasLimit
+        let reward0 = BigNumber.from(0)
+        let reward1 = BigNumber.from(0)
 
-        // add 10% to gas limit to be safe
-        gasLimit = gasLimit.mul(11).div(10)
+        // only autocompound when fees available
+        const fees = await npm.connect(ethers.constants.AddressZero).callStatic.collect([nftId, signer.address, BigNumber.from(2).pow(128).sub(1), BigNumber.from(2).pow(128).sub(1)])
+        if (fees.amount0.gt(0) || fees.amount1.gt(0)) {
 
-        // to high cost - skip
-        if (network !== "arbitrum" && gasLimit.gt(maxGasLimit) || network === "arbitrum" && gasLimit.gt(maxGasLimitArbitrum)) {
-            console.log("Autocompound position gas cost exceeded max", nftId, gasLimit.toString())
-            return { error: true }
+            gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap })
+
+            // add 10% to gas limit to be safe
+            gasLimit = gasLimit.mul(11).div(10)
+
+            // to high cost - skip
+            if (network !== "arbitrum" && gasLimit.gt(maxGasLimit) || network === "arbitrum" && gasLimit.gt(maxGasLimitArbitrum)) {
+                console.log("Autocompound position gas cost exceeded max", nftId, gasLimit.toString())
+                return { error: true }
+            }
+
+            [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit })
         }
-
-        const [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit })
-
+           
         const cost = gasPrice.mul(gasLimit)
 
         const gain0 = reward0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))
@@ -224,9 +236,8 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
         const gains = gain0.add(gain1)
 
         return { gains, cost, gasLimit, doSwap }
+
     } catch (err) {
-        console.log(err)
-        console.log("Autocompound position calc err", nftId, doSwap)
         return { error: true }
     }
 }
@@ -278,6 +289,8 @@ async function autoCompoundPositions() {
                 result = resultA
             } else if (!resultB.error) {
                 result = resultB
+            } else {
+                console.log("Both results error for ", nftId)
             }
 
             if (result) {
