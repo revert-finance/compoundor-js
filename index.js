@@ -67,7 +67,7 @@ if (network === "polygon") {
 
 const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL)
 
-const contractAddress = "0x98ec492942090364ac0736ef1a741ae6c92ec790"
+const contractAddress = "0x5411894842e610c4d0f6ed4c232da689400f94a1"
 
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
 const factory = new ethers.Contract(factoryAddress, FACTORY_RAW.abi, provider)
@@ -203,7 +203,7 @@ function needsCheck(trackedPosition, gasPrice) {
 async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, doSwap, gasPrice, tokenPrice0X96, tokenPrice1X96) {
 
     try {
-        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasPrice })
+        let gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap })
 
         // add 10% to gas limit to be safe
         gasLimit = gasLimit.mul(11).div(10)
@@ -214,7 +214,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
             return { error: true }
         }
 
-        const [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasPrice, gasLimit })
+        const [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit })
 
         const cost = gasPrice.mul(gasLimit)
 
