@@ -13,7 +13,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
 const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
-const defaultGasLimit = 500000
+const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(1000000)
 const maxGasLimitArbitrum = BigNumber.from(2000000)
 
@@ -216,16 +216,13 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
 
             gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap })
 
-            // add 10% to gas limit to be safe
-            gasLimit = gasLimit.mul(11).div(10)
-
             // to high cost - skip
             if (network !== "arbitrum" && gasLimit.gt(maxGasLimit) || network === "arbitrum" && gasLimit.gt(maxGasLimitArbitrum)) {
                 console.log("Autocompound position gas cost exceeded max", nftId, gasLimit.toString())
                 return { error: true }
             }
 
-            [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit })
+            [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit: gasLimit.mul(11).div(10) })
         }
            
         const cost = gasPrice.mul(gasLimit)
@@ -244,7 +241,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
 
 async function getGasPrice() {
     if (network == "optimism") {
-        return (await mainnetProvider.getGasPrice()).div(89) // optimism estimation - for autocompound call
+        return (await mainnetProvider.getGasPrice()).div(93) // optimism estimation - for autocompound call
     }
     return await provider.getGasPrice()
 }
@@ -298,7 +295,7 @@ async function autoCompoundPositions() {
                 console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
 
                 if (isReady(result.gains, result.cost)) {
-                    const params = { gasLimit: result.gasLimit }
+                    const params = { gasLimit: result.gasLimit.mul(11).div(10) }
                     if (network == "mainnet") {
                         // mainnet EIP-1559 handling
                         const feeData = await provider.getFeeData()
