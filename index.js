@@ -12,7 +12,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
-const minGainCostPercent = BigNumber.from(150) // when gains / cost >= 120% do autocompound (protocol fee covers the rest)
+const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
 const defaultGasLimit = 500000
 const maxGasLimit = BigNumber.from(1000000)
 const maxGasLimitArbitrum = BigNumber.from(2000000)
