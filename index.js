@@ -239,9 +239,9 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
     }
 }
 
-async function getGasPrice() {
-    if (network == "optimism") {
-        return (await mainnetProvider.getGasPrice()).div(80) // optimism estimation - for autocompound call
+async function getGasPrice(isEstimation) {
+    if (network == "optimism" && isEstimation) {
+        return (await mainnetProvider.getGasPrice()).div(89) // optimism estimation - for autocompound call
     }
     return await provider.getGasPrice()
 }
@@ -251,7 +251,7 @@ async function autoCompoundPositions() {
     const tokenPriceCache = {}
 
     try {
-        let gasPrice = await getGasPrice()
+        let gasPrice = await getGasPrice(true)
 
         console.log("Current gas price", gasPrice.toString())
 
@@ -264,7 +264,7 @@ async function autoCompoundPositions() {
             }
 
             // update gas price to latest
-            gasPrice = await getGasPrice()
+            gasPrice = await getGasPrice(true)
             const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
             const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
@@ -301,6 +301,8 @@ async function autoCompoundPositions() {
                         const feeData = await provider.getFeeData()
                         params.maxFeePerGas = feeData.maxFeePerGas
                         params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
+                    } else if (network == "optimism") {
+                        params.gasPrice = await getGasPrice(false)
                     } else {
                         params.gasPrice = gasPrice
                     }
