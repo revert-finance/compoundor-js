@@ -12,7 +12,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
-const reloadPositionsInterval = 60000 * 60 // each hour load all positions from the graph (fallback for failing WS)
+const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(1000000)
@@ -67,8 +67,6 @@ if (network === "polygon") {
     provider.getGasPrice = createGetGasPrice('rapid') 
 }
 
-const wsProvider = new ethers.providers.WebSocketProvider(process.env.WS_URL)
-
 const contractAddress = "0x5411894842e610c4d0f6ed4c232da689400f94a1"
 
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
@@ -88,43 +86,19 @@ async function getPositions() {
     return result.data.data.tokens.map(t => parseInt(t.id, 10))    
 }
 
-async function loadTrackedPositions() {
-    // get active positions from the graph
-    const tokenIds = await getPositions()
-    for (const tokenId of tokenIds) {
-        await addTrackedPosition(tokenId) 
+async function updateTrackedPositions() {
+    const nftIds = await getPositions()
+    for (const nftId of nftIds) {
+        if (!trackedPositions[nftId]) {
+            await addTrackedPosition(nftId) 
+        }
     }
-}
-
-async function trackPositions() {
-
-    await loadTrackedPositions() 
-
-    // setup ws listeners
-    const depositedFilter = contract.filters.TokenDeposited()
-    const withdrawnFilter = contract.filters.TokenWithdrawn()
-
-    wsProvider.on(depositedFilter, async (...args) => {
-        const event = args[args.length - 1]
-        const log = contract.interface.parseLog(event)
-        await addTrackedPosition(log.args.tokenId.toNumber())
-    })
-    wsProvider.on(withdrawnFilter, async (...args) => {
-        const event = args[args.length - 1]
-        const log = contract.interface.parseLog(event)
-        await removeTrackedPosition(log.args.tokenId.toNumber())
-    })
 }
 
 async function addTrackedPosition(nftId) {
     console.log("Add tracked position", nftId)
     const position = await npm.positions(nftId)
     trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
-}
-
-async function removeTrackedPosition(nftId) {
-    console.log("Removed tracked position", nftId)
-    delete trackedPositions[nftId]
 }
 
 function updateTrackedPosition(nftId, gains, cost) {
@@ -327,10 +301,10 @@ async function autoCompoundPositions() {
 }
 
 async function run() {
-    await trackPositions()
+    await updateTrackedPositions()
     await autoCompoundPositions()
 
-    setInterval(async () => { await loadTrackedPositions() }, reloadPositionsInterval);
+    setInterval(async () => { await updateTrackedPositions() }, updatePositionsInterval);
 }
 
 run()
