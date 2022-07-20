@@ -12,6 +12,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
+const reloadPositionsInterval = 60000 * 60 // each hour load all positions from the graph (fallback for failing WS)
 const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(1000000)
@@ -87,13 +88,17 @@ async function getPositions() {
     return result.data.data.tokens.map(t => parseInt(t.id, 10))    
 }
 
-async function trackPositions() {
-
+async function loadTrackedPositions() {
     // get active positions from the graph
     const tokenIds = await getPositions()
     for (const tokenId of tokenIds) {
         await addTrackedPosition(tokenId) 
     }
+}
+
+async function trackPositions() {
+
+    await loadTrackedPositions() 
 
     // setup ws listeners
     const depositedFilter = contract.filters.TokenDeposited()
@@ -114,7 +119,7 @@ async function trackPositions() {
 async function addTrackedPosition(nftId) {
     console.log("Add tracked position", nftId)
     const position = await npm.positions(nftId)
-    trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee }
+    trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
 }
 
 async function removeTrackedPosition(nftId) {
@@ -318,12 +323,14 @@ async function autoCompoundPositions() {
         console.log("Error during autocompound", err)
     }
 
-    setTimeout(async () => { autoCompoundPositions() }, checkInterval);
+    setTimeout(async () => { await autoCompoundPositions() }, checkInterval);
 }
 
 async function run() {
     await trackPositions()
     await autoCompoundPositions()
+
+    setInterval(async () => { await loadTrackedPositions() }, reloadPositionsInterval);
 }
 
 run()
