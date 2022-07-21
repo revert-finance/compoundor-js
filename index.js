@@ -105,7 +105,7 @@ function updateTrackedPosition(nftId, gains, cost) {
     const now = new Date().getTime()
     if (trackedPositions[nftId].lastCheck) {
         const timeElapsedMs = now - trackedPositions[nftId].lastCheck
-        trackedPositions[nftId].gainsPerMs = trackedPositions[nftId].lastGains.sub(gains).div(timeElapsedMs)
+        trackedPositions[nftId].gainsPerSec = (gains.sub(trackedPositions[nftId].lastGains).mul(1000)).div(timeElapsedMs)
     }
     trackedPositions[nftId].lastCheck = now
     trackedPositions[nftId].lastGains = gains
@@ -169,7 +169,7 @@ function needsCheck(trackedPosition, gasPrice) {
     }
 
     const timeElapsedMs = new Date().getTime() - trackedPosition.lastCheck
-    const estimatedGains = (trackedPosition.gainsPerMs || BigNumber.from(0)).mul(timeElapsedMs)
+    const estimatedGains = (trackedPosition.gainsPerSec || BigNumber.from(0)).mul(BigNumber.from(timeElapsedMs).div(1000))
 
     // if its ready with current gas price - check
     if (isReady(trackedPosition.lastGains.add(estimatedGains), gasPrice.mul(trackedPosition.lastCost))) {
