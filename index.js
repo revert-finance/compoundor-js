@@ -251,7 +251,9 @@ async function autoCompoundPositions() {
 
             // if none prefered token found - keep original tokens - otherwise convert to first one in list
             const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
-            const withdrawReward = true
+
+            // dont withdraw reward for now
+            const withdrawReward = false
 
             // try with and without swap
             const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
