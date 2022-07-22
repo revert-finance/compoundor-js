@@ -228,6 +228,7 @@ async function getGasPrice(isEstimation) {
 async function autoCompoundPositions() {
 
     const tokenPriceCache = {}
+    const toRemove = []
 
     try {
         let gasPrice = await getGasPrice(true)
@@ -268,6 +269,7 @@ async function autoCompoundPositions() {
             } else if (!resultB.error) {
                 result = resultB
             } else {
+                toRemove.push(nftId)
                 console.log("Both results error for ", nftId)
             }
 
@@ -295,6 +297,12 @@ async function autoCompoundPositions() {
                 }
             }
         }
+
+        // remove errored positions - usually happens because they were removed
+        toRemove.forEach(nftId => {     
+            console.log("Removed tracked position", nftId)
+            delete trackedPositions[nftId]  
+        })
     } catch (err) {
         console.log("Error during autocompound", err)
     }
