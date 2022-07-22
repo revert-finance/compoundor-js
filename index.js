@@ -247,8 +247,8 @@ async function autoCompoundPositions() {
             gasPrice = await getGasPrice(true)
             const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
-            const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0.toLowerCase())
-            const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1.toLowerCase())
+            const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
+            const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1)
 
             // if none prefered token found - keep original tokens - otherwise convert to first one in list
             const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
