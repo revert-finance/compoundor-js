@@ -22,7 +22,7 @@ const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 
 const nativeTokenAddresses = {
-    "mainnet" : "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    "mainnet" : "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     "polygon" : "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
     "optimism" : "0x4200000000000000000000000000000000000006",
     "arbitrum" : "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
@@ -37,16 +37,16 @@ const usdcAddresses = {
     "mainnet" : "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
     "polygon" : "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
     "optimism" : "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
-    "arbitrum" : "0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8"
+    "arbitrum" : "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"
 }
 const usdtAddresses = {
     "mainnet" : "0xdac17f958d2ee523a2206206994597c13d831ec7",
     "polygon" : "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
     "optimism" : "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",
-    "arbitrum" : "0xFd086bC7CD5C481DCC9C85ebE478A1C0b69FCbb9"
+    "arbitrum" : "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
 }
 const daiAddresses = {
-    "mainnet" : "0x6B175474E89094C44Da98b954EedeAC495271d0F",
+    "mainnet" : "0x6b175474e89094c44da98b954eedeac495271d0f",
     "polygon" : "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
     "optimism" : "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
     "arbitrum" : "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
@@ -247,8 +247,8 @@ async function autoCompoundPositions() {
             gasPrice = await getGasPrice(true)
             const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
-            const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
-            const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1)
+            const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0.toLowerCase())
+            const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1.toLowerCase())
 
             // if none prefered token found - keep original tokens - otherwise convert to first one in list
             const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
