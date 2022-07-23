@@ -125,7 +125,7 @@ async function getTokenETHPricesX96(position, cache) {
     } else if (tokenPrice0X96 || tokenPrice1X96) {
         // if only one has ETH pair - calculate other with pool price
         const poolAddress = await factory.getPool(position.token0, position.token1, position.fee);
-        const poolContract = await ethers.getContractAt("IUniswapV3Pool", poolAddress);
+        const poolContract = new ethers.Contract(poolAddress, POOL_RAW.abi, provider)
         const slot0 = await poolContract.slot0()
         const priceX96 = slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96))
         return [tokenPrice0X96 || tokenPrice1X96.mul(priceX96).div(BigNumber.from(2).pow(96)), tokenPrice1X96 || tokenPrice0X96.mul(BigNumber.from(2).pow(96)).div(priceX96)]
