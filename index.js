@@ -22,34 +22,34 @@ const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 
 const nativeTokenAddresses = {
-    "mainnet" : "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    "polygon" : "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
-    "optimism" : "0x4200000000000000000000000000000000000006",
-    "arbitrum" : "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+    "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "polygon": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
+    "optimism": "0x4200000000000000000000000000000000000006",
+    "arbitrum": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
 }
 const wethAddresses = {
-    "mainnet" : "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    "polygon" : "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
-    "optimism" : "0x4200000000000000000000000000000000000006",
-    "arbitrum" : "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
+    "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+    "polygon": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
+    "optimism": "0x4200000000000000000000000000000000000006",
+    "arbitrum": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1"
 }
 const usdcAddresses = {
-    "mainnet" : "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-    "polygon" : "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
-    "optimism" : "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
-    "arbitrum" : "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"
+    "mainnet": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+    "polygon": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
+    "optimism": "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
+    "arbitrum": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8"
 }
 const usdtAddresses = {
-    "mainnet" : "0xdac17f958d2ee523a2206206994597c13d831ec7",
-    "polygon" : "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
-    "optimism" : "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",
-    "arbitrum" : "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
+    "mainnet": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+    "polygon": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
+    "optimism": "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",
+    "arbitrum": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9"
 }
 const daiAddresses = {
-    "mainnet" : "0x6b175474e89094c44da98b954eedeac495271d0f",
-    "polygon" : "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
-    "optimism" : "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
-    "arbitrum" : "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
+    "mainnet": "0x6b175474e89094c44da98b954eedeac495271d0f",
+    "polygon": "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
+    "optimism": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
+    "arbitrum": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
 }
 
 const network = process.env.NETWORK
@@ -64,7 +64,7 @@ const mainnetProvider = new ethers.providers.JsonRpcProvider(process.env.MAINNET
 // special gas price handling for polygon
 if (network === "polygon") {
     const { createGetGasPrice } = require('./lib/polygongastracker');
-    provider.getGasPrice = createGetGasPrice('rapid') 
+    provider.getGasPrice = createGetGasPrice('rapid')
 }
 
 const contractAddress = "0x5411894842e610c4d0f6ed4c232da689400f94a1"
@@ -81,16 +81,16 @@ const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/comp
 
 async function getPositions() {
     const result = await axios.post(graphApiUrl, {
-        query: "{ tokens(where: { account_not: null }) { id } }" 
+        query: "{ tokens(where: { account_not: null }) { id } }"
     })
-    return result.data.data.tokens.map(t => parseInt(t.id, 10))    
+    return result.data.data.tokens.map(t => parseInt(t.id, 10))
 }
 
 async function updateTrackedPositions() {
     const nftIds = await getPositions()
     for (const nftId of nftIds) {
         if (!trackedPositions[nftId]) {
-            await addTrackedPosition(nftId) 
+            await addTrackedPosition(nftId)
         }
     }
 }
@@ -139,7 +139,7 @@ async function getTokenETHPriceX96(address) {
     if (address.toLowerCase() == nativeTokenAddress.toLowerCase()) {
         return BigNumber.from(2).pow(96);
     }
-    
+
     // TODO take average or highest liquidity
     for (let fee of [100, 500, 3000, 10000]) {
         const poolAddress = await factory.getPool(address, nativeTokenAddress, fee);
@@ -197,13 +197,12 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
 
             // to high cost - skip
             if (network !== "arbitrum" && gasLimit.gt(maxGasLimit) || network === "arbitrum" && gasLimit.gt(maxGasLimitArbitrum)) {
-                console.log("Autocompound position gas cost exceeded max", nftId, gasLimit.toString())
-                return { error: true }
+                return { error: true, message: "Gas cost exceeded" }
             }
 
-            [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound( { tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit: gasLimit.mul(11).div(10) })
+            [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit: gasLimit.mul(11).div(10) })
         }
-           
+
         const cost = gasPrice.mul(gasLimit)
 
         const gain0 = reward0.mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))
@@ -214,7 +213,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
         return { gains, cost, gasLimit, doSwap }
 
     } catch (err) {
-        return { error: true }
+        return { error: true, message: err.message }
     }
 }
 
@@ -260,20 +259,15 @@ async function autoCompoundPositions() {
             const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
             const resultB = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
 
-
-            let result = null
-            if (!resultA.error && !resultB.error) {
-                result = resultA.gains.sub(resultA.cost).gt(resultB.gains.sub(resultB.cost)) ? resultA : resultB
-            } else if (!resultA.error) {
-                result = resultA
-            } else if (!resultB.error) {
-                result = resultB
-            } else {
-                toRemove.push(nftId)
-                console.log("Both results error for ", nftId)
-            }
-
-            if (result) {
+            if (!resultA.error || !resultB.error) {
+                let result = null
+                if (!resultA.error && !resultB.error) {
+                    result = resultA.gains.sub(resultA.cost).gt(resultB.gains.sub(resultB.cost)) ? resultA : resultB
+                } else if (!resultA.error) {
+                    result = resultA
+                } else {
+                    result = resultB
+                }
 
                 console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
 
@@ -295,13 +289,16 @@ async function autoCompoundPositions() {
                 } else {
                     updateTrackedPosition(nftId, result.gains, result.cost)
                 }
+            } else {
+                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit.mul(gasPrice))
+                console.log("Error calculating", nftId, resultA.message)
             }
         }
 
         // remove errored positions - usually happens because they were removed
-        toRemove.forEach(nftId => {     
+        toRemove.forEach(nftId => {
             console.log("Removed tracked position", nftId)
-            delete trackedPositions[nftId]  
+            delete trackedPositions[nftId]
         })
     } catch (err) {
         console.log("Error during autocompound", err)
