@@ -13,6 +13,7 @@ const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
 const updatePositionsInterval = 60000 // each minute load position list from the graph
+const checkGainsInterval = 60000 * 60 // each hour check balances
 const minGainCostPercent = BigNumber.from(99) // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(1000000)
@@ -21,6 +22,12 @@ const maxGasLimitArbitrum = BigNumber.from(2000000)
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 
+const nativeTokenName = {
+    "mainnet": "ETH",
+    "polygon": "MATIC",
+    "optimism": "ETH",
+    "arbitrum": "ETH"
+}
 const nativeTokenAddresses = {
     "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     "polygon": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
@@ -84,6 +91,13 @@ async function getPositions() {
         query: "{ tokens(where: { account_not: null }) { id } }"
     })
     return result.data.data.tokens.map(t => parseInt(t.id, 10))
+}
+
+async function getTokenBalances(account) {
+    const result = await axios.post(graphApiUrl, {
+        query: "{ accountBalances(where: { account: \"" + account + "\" }) { token, balance } }"
+    })
+    return result.data.data.accountBalances
 }
 
 async function updateTrackedPositions() {
@@ -224,6 +238,17 @@ async function getGasPrice(isEstimation) {
     return await provider.getGasPrice()
 }
 
+async function checkGains() {
+    const tokenBalances = await getTokenBalances(await signer.getAddress())
+    let gains = BigNumber.from(0)
+    for(const balance of tokenBalances) {
+        const tokenPriceX96 = await getTokenETHPriceX96(balance.token)
+        const gain = BigNumber.from(balance.balance).mul(tokenPriceX96).div(BigNumber.from(2).pow(96))
+        gains = gains.add(gain)
+    }
+    console.log(ethers.utils.formatEther(gains), nativeTokenName[network])
+}
+
 async function autoCompoundPositions() {
 
     const tokenPriceCache = {}
@@ -305,13 +330,18 @@ async function autoCompoundPositions() {
     }
 
     setTimeout(async () => { await autoCompoundPositions() }, checkInterval);
+
 }
 
 async function run() {
+
     await updateTrackedPositions()
     await autoCompoundPositions()
 
+    await checkGains()
+
     setInterval(async () => { await updateTrackedPositions() }, updatePositionsInterval);
+    setInterval(async () => { await checkGains() }, checkGainsInterval);
 }
 
 run()
