@@ -4,6 +4,7 @@
   "description": "simple implementation of an auto-compounder bot",
   "main": "index.js",
   "dependencies": {
+    "@thanpolas/univ3prices": "^3.0.2",
     "axios": "^0.27.2",
     "dotenv": "^16.0.1",
     "ethers": "^5.5.4"

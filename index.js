@@ -1,6 +1,7 @@
 require('dotenv').config()
 const ethers = require("ethers");
 const axios = require('axios');
+const univ3prices = require('@thanpolas/univ3prices')
 
 
 const BigNumber = ethers.BigNumber;
@@ -238,15 +239,41 @@ async function getGasPrice(isEstimation) {
     return await provider.getGasPrice()
 }
 
-async function checkGains() {
-    const tokenBalances = await getTokenBalances(await signer.getAddress())
-    let gains = BigNumber.from(0)
-    for(const balance of tokenBalances) {
-        const tokenPriceX96 = await getTokenETHPriceX96(balance.token)
-        const gain = BigNumber.from(balance.balance).mul(tokenPriceX96).div(BigNumber.from(2).pow(96))
-        gains = gains.add(gain)
+async function checkGainsAndTVL() {
+    try {
+        const tokenPriceCache = {}
+        const nftIds = await getPositions()
+        let tvl = BigNumber.from(0)
+        for (const nftId of nftIds) {
+            const trackedPosition = trackedPositions[nftId]
+            if (trackedPosition) {
+                const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
+
+                const poolAddress = await factory.getPool(trackedPosition.token0, trackedPosition.token1, trackedPosition.fee);
+                const poolContract = new ethers.Contract(poolAddress, POOL_RAW.abi, provider)
+                const slot0 = await poolContract.slot0()
+
+                const lowerSqrtPriceX96 = univ3prices.tickMath.getSqrtRatioAtTick(trackedPosition.tickLower)
+                const upperSqrtPriceX96 = univ3prices.tickMath.getSqrtRatioAtTick(trackedPosition.tickUpper)
+                amounts = univ3prices.getAmountsForLiquidityRange(slot0.sqrtPriceX96, lowerSqrtPriceX96, upperSqrtPriceX96, trackedPosition.liquidity)
+
+                tvl = tvl.add(BigNumber.from(amounts[0].toString()).mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))).add(BigNumber.from(amounts[1].toString()).mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
+            }
+        }
+
+        const tokenBalances = await getTokenBalances(await signer.getAddress())
+        let gains = BigNumber.from(0)
+        for (const balance of tokenBalances) {
+            const tokenPriceX96 = tokenPriceCache[balance.token] || await getTokenETHPriceX96(balance.token)
+            const gain = BigNumber.from(balance.balance).mul(tokenPriceX96).div(BigNumber.from(2).pow(96))
+            gains = gains.add(gain)
+        }
+
+        console.log("Gains", ethers.utils.formatEther(gains), nativeTokenName[network])
+        console.log("TVL", ethers.utils.formatEther(tvl), nativeTokenName[network])
+    } catch (err) {
+        console.log("Error loading gains / TVL", err)
     }
-    console.log(ethers.utils.formatEther(gains), nativeTokenName[network])
 }
 
 async function autoCompoundPositions() {
@@ -337,11 +364,10 @@ async function run() {
 
     await updateTrackedPositions()
     await autoCompoundPositions()
-
-    await checkGains()
-
+    await checkGainsAndTVL()
+    
     setInterval(async () => { await updateTrackedPositions() }, updatePositionsInterval);
-    setInterval(async () => { await checkGains() }, checkGainsInterval);
+    setInterval(async () => { await checkGainsAndTVL() }, checkGainsInterval);
 }
 
 run()
