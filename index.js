@@ -184,11 +184,12 @@ async function findPricePoolForToken(address) {
 
 
     for (let fee of [100, 500, 3000, 10000]) {
-        pricePoolAddress = await factory.getPool(address, nativeTokenAddress, fee)
-        if (pricePoolAddress > 0) {
-            const poolContract = new ethers.Contract(pricePoolAddress, POOL_RAW.abi, provider)
+        const candidatePricePoolAddress = await factory.getPool(address, nativeTokenAddress, fee)
+        if (candidatePricePoolAddress > 0) {
+            const poolContract = new ethers.Contract(candidatePricePoolAddress, POOL_RAW.abi, provider)
             const liquidity = (await poolContract.liquidity())
             if (liquidity.gt(maxLiquidity)) {
+                pricePoolAddress = candidatePricePoolAddress
                 maxLiquidity = liquidity
                 if (isToken1WETH === null) {
                     isToken1WETH = (await poolContract.token1()).toLowerCase() == nativeTokenAddress.toLowerCase();
