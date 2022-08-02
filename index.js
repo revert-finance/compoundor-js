@@ -298,8 +298,10 @@ async function checkGainsAndTVL() {
         let gains = BigNumber.from(0)
         for (const balance of tokenBalances) {
             const tokenPriceX96 = tokenPriceCache[balance.token] || await getTokenETHPriceX96(balance.token)
-            const gain = BigNumber.from(balance.balance).mul(tokenPriceX96).div(BigNumber.from(2).pow(96))
-            gains = gains.add(gain)
+            if (tokenPriceX96) {
+                const gain = BigNumber.from(balance.balance).mul(tokenPriceX96).div(BigNumber.from(2).pow(96))
+                gains = gains.add(gain)
+            }
         }
 
         console.log("Gains", ethers.utils.formatEther(gains), nativeTokenName[network])
