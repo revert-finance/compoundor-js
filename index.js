@@ -84,10 +84,12 @@ const npm = new ethers.Contract(npmAddress, NPM_RAW.abi, provider)
 const signer = new ethers.Wallet(process.env.COMPOUNDER_PRIVATE_KEY, provider)
 
 const trackedPositions = {}
+const pricePoolCache = {}
 
 const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-" + network
 
 async function getPositions() {
+
     const result = await axios.post(graphApiUrl, {
         query: "{ tokens(where: { account_not: null }) { id } }"
     })
@@ -155,20 +157,50 @@ async function getTokenETHPriceX96(address) {
         return BigNumber.from(2).pow(96);
     }
 
-    // TODO take average or highest liquidity
-    for (let fee of [100, 500, 3000, 10000]) {
-        const poolAddress = await factory.getPool(address, nativeTokenAddress, fee);
-        if (poolAddress > 0) {
-            const poolContract = new ethers.Contract(poolAddress, POOL_RAW.abi, provider)
-            const isToken1WETH = (await poolContract.token1()).toLowerCase() == nativeTokenAddress.toLowerCase();
-            const slot0 = await poolContract.slot0()
-            if (slot0.sqrtPriceX96.gt(0)) {
-                return isToken1WETH ? slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96)) : BigNumber.from(2).pow(192 + 96).div(slot0.sqrtPriceX96.pow(2))
-            }
+
+    let price = null
+
+    const pricePool = await findPricePoolForToken(address)
+    if (pricePool.address > 0) {
+        const poolContract = new ethers.Contract(pricePool.address, POOL_RAW.abi, provider)
+        const slot0 = await poolContract.slot0()
+        if (slot0.sqrtPriceX96.gt(0)) {
+            price = pricePool.isToken1WETH ? slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96)) : BigNumber.from(2).pow(192 + 96).div(slot0.sqrtPriceX96.pow(2))
         }
     }
 
-    return null
+    return price
+}
+
+async function findPricePoolForToken(address) {
+
+    if (pricePoolCache[address]) {
+        return pricePoolCache[address]
+    }
+
+    let maxLiquidity = BigNumber.from(0)
+    let pricePoolAddress = null
+    let isToken1WETH = null
+
+
+    for (let fee of [100, 500, 3000, 10000]) {
+        pricePoolAddress = await factory.getPool(address, nativeTokenAddress, fee)
+        if (pricePoolAddress > 0) {
+            const poolContract = new ethers.Contract(pricePoolAddress, POOL_RAW.abi, provider)
+            const liquidity = (await poolContract.liquidity())
+            if (liquidity.gt(maxLiquidity)) {
+                maxLiquidity = liquidity
+                if (isToken1WETH === null) {
+                    isToken1WETH = (await poolContract.token1()).toLowerCase() == nativeTokenAddress.toLowerCase();
+                }
+            }
+           
+        }
+    }
+
+    pricePoolCache[address] = { address: pricePoolAddress, isToken1WETH }
+
+    return pricePoolCache[address] 
 }
 
 function isReady(gains, cost) {
@@ -234,7 +266,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
 
 async function getGasPrice(isEstimation) {
     if (network == "optimism" && isEstimation) {
-        return (await mainnetProvider.getGasPrice()).div(89) // optimism estimation - for autocompound call
+        return (await mainnetProvider.getGasPrice()).div(89) // TODO optimism estimation - for autocompound call - good enough for now
     }
     return await provider.getGasPrice()
 }
