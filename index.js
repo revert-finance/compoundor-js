@@ -6,6 +6,7 @@ const univ3prices = require('@thanpolas/univ3prices')
 
 const BigNumber = ethers.BigNumber;
 
+const IERC20_ABI = require("./contracts/IERC20.json")
 const CONTRACT_RAW = require("./contracts/Compoundor.json")
 const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
@@ -178,19 +179,21 @@ async function findPricePoolForToken(address) {
         return pricePoolCache[address]
     }
 
-    let maxLiquidity = BigNumber.from(0)
+    let maxBalanceETH = BigNumber.from(0)
     let pricePoolAddress = null
     let isToken1WETH = null
 
+    const nativeToken = new ethers.Contract(nativeTokenAddress, IERC20_ABI, provider)
 
     for (let fee of [100, 500, 3000, 10000]) {
         const candidatePricePoolAddress = await factory.getPool(address, nativeTokenAddress, fee)
         if (candidatePricePoolAddress > 0) {
             const poolContract = new ethers.Contract(candidatePricePoolAddress, POOL_RAW.abi, provider)
-            const liquidity = (await poolContract.liquidity())
-            if (liquidity.gt(maxLiquidity)) {
+
+            const balanceETH = (await nativeToken.balanceOf(candidatePricePoolAddress))
+            if (balanceETH.gt(maxBalanceETH)) {
                 pricePoolAddress = candidatePricePoolAddress
-                maxLiquidity = liquidity
+                maxBalanceETH = balanceETH
                 if (isToken1WETH === null) {
                     isToken1WETH = (await poolContract.token1()).toLowerCase() == nativeTokenAddress.toLowerCase();
                 }
