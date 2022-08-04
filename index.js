@@ -16,7 +16,7 @@ const checkInterval = 30000 // quick check each 30 secs
 const forceCheckInterval = 60000 * 10 // update each 10 mins
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const checkGainsInterval = 60000 * 60 // each hour check balances
-const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "99") // when gains / cost >= 99% do autocompound (protocol fee covers the rest)
+const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(1000000)
 const maxGasLimitArbitrum = BigNumber.from(2000000)
@@ -86,6 +86,9 @@ const signer = new ethers.Wallet(process.env.COMPOUNDER_PRIVATE_KEY, provider)
 
 const trackedPositions = {}
 const pricePoolCache = {}
+
+let lastTxHash = null
+let lastTxNonce = null
 
 const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-" + network
 
@@ -179,6 +182,7 @@ async function findPricePoolForToken(address) {
         return pricePoolCache[address]
     }
 
+    const minimalBalanceETH = BigNumber.from(10).pow(18)
     let maxBalanceETH = BigNumber.from(0)
     let pricePoolAddress = null
     let isToken1WETH = null
@@ -191,7 +195,7 @@ async function findPricePoolForToken(address) {
             const poolContract = new ethers.Contract(candidatePricePoolAddress, POOL_RAW.abi, provider)
 
             const balanceETH = (await nativeToken.balanceOf(candidatePricePoolAddress))
-            if (balanceETH.gt(maxBalanceETH)) {
+            if (balanceETH.gt(maxBalanceETH) && balanceETH.gte(minimalBalanceETH)) {
                 pricePoolAddress = candidatePricePoolAddress
                 maxBalanceETH = balanceETH
                 if (isToken1WETH === null) {
@@ -373,14 +377,31 @@ async function autoCompoundPositions() {
                     } else {
                         params.gasPrice = gasPrice
                     }
+
+                    // if there is a pending tx - check if added - if not 
+                    if (lastTxHash) {
+                        const txReceipt = await provider.getTransactionReceipt(lastTxHash);
+                        if (txReceipt && txReceipt.blockNumber) {
+                            lastTxHash = null
+                            lastTxNonce = null
+                        } else {
+                            console.log("Overwrite tx with nonce", lastTxNonce)
+                            params.nonce = lastTxNonce
+                        }
+                    }
+
                     const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
+
+                    lastTxHash = tx.hash
+                    lastTxNonce = tx.nonce
+
                     console.log("Autocompounded position", nftId, tx.hash)
                     updateTrackedPosition(nftId, BigNumber.from(0), result.cost)
                 } else {
-                    updateTrackedPosition(nftId, result.gains, result.cost)
+                    updateTrackedPosition(nftId, result.gains, result.cost, null)
                 }
             } else {
-                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit.mul(gasPrice))
+                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit.mul(gasPrice), null)
                 console.log("Error calculating", nftId, resultA.message)
             }
         }
