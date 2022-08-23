@@ -64,7 +64,7 @@ const daiAddresses = {
 const network = process.env.NETWORK
 const nativeTokenAddress = nativeTokenAddresses[network]
 
-// order for reward token preference 
+// order for reward token preference
 const preferedRewardToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
 
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
@@ -95,7 +95,7 @@ const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/comp
 async function getPositions() {
 
     const result = await axios.post(graphApiUrl, {
-        query: "{ tokens(where: { account_not: null }) { id } }"
+        query: "{ tokens(where: { account_not: null}, first:1000) { id } }"
     })
     return result.data.data.tokens.map(t => parseInt(t.id, 10))
 }
