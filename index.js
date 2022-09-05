@@ -423,10 +423,10 @@ async function run() {
 
     await updateTrackedPositions()
     await autoCompoundPositions()
-    await checkGainsAndTVL()
+    //await checkGainsAndTVL()
     
     setInterval(async () => { await updateTrackedPositions() }, updatePositionsInterval);
-    setInterval(async () => { await checkGainsAndTVL() }, checkGainsInterval);
+    //setInterval(async () => { await checkGainsAndTVL() }, checkGainsInterval);
 }
 
 run()
