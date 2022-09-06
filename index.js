@@ -13,7 +13,7 @@ const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
 const checkInterval = 30000 // quick check each 30 secs
-const forceCheckInterval = 60000 * 10 // update each 10 mins
+const forceCheckInterval = 60000 * 60 // update each 60 mins
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const checkGainsInterval = 60000 * 60 // each hour check balances
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
@@ -94,15 +94,24 @@ const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/comp
 
 async function getPositions() {
 
-    const result = await axios.post(graphApiUrl, {
-        query: "{ tokens(where: { account_not: null}, first:1000) { id } }"
-    })
-    return result.data.data.tokens.map(t => parseInt(t.id, 10))
+    const tokens = []
+    let skip = 0
+    const take = 1000
+    let result
+    do {
+        result = await axios.post(graphApiUrl, {
+            query: "{ tokens(where: { account_not: null}, first: " + take + ", skip: " + skip + ") { id } }"
+        })
+        skip += take
+        tokens.push(...result.data.data.tokens.map(t => parseInt(t.id, 10)))
+    } while (result.data.data.tokens.length == take)
+  
+    return tokens
 }
 
 async function getTokenBalances(account) {
     const result = await axios.post(graphApiUrl, {
-        query: "{ accountBalances(where: { account: \"" + account + "\" }) { token, balance } }"
+        query: "{ accountBalances(where: { account: \"" + account + "\" }, first:1000) { token, balance } }"
     })
     return result.data.data.accountBalances
 }
