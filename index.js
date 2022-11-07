@@ -160,8 +160,8 @@ async function getTokenETHPricesX96(position, cache) {
         const priceX96 = slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96))
         return [tokenPrice0X96 || tokenPrice1X96.mul(priceX96).div(BigNumber.from(2).pow(96)), tokenPrice1X96 || tokenPrice0X96.mul(BigNumber.from(2).pow(96)).div(priceX96)]
     } else {
-        // TODO decide what to do here... should never happen
-        throw Error("Couldn't find prices for position", position.token0, position.token1, position.fee)
+        console.log("Couldn't find prices for position", position.token0, position.token1, position.fee)
+        return [BigNumber.from(0), BigNumber.from(0)]
     }
 }
 
