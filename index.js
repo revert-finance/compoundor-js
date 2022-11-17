@@ -296,10 +296,14 @@ async function autoCompoundPositions() {
     try {
         let gasPrice = await getGasPrice(true)
         console.log("Current gas price", gasPrice.toString())
-        
-        for (const nftId in trackedPositions) {
+
+        for (const nftId of Object.keys(trackedPositions)) {
 
             const trackedPosition = trackedPositions[nftId]
+
+            if (!trackedPosition) {
+                continue;
+            }
 
             if (!needsCheck(trackedPosition, gasPrice)) {
                 continue;
