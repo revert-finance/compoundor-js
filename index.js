@@ -109,18 +109,17 @@ async function getPositions() {
     return tokens
 }
 
-async function getTokenBalances(account) {
-    const result = await axios.post(graphApiUrl, {
-        query: "{ accountBalances(where: { account: \"" + account + "\" }, first:1000) { token, balance } }"
-    })
-    return result.data.data.accountBalances
-}
-
 async function updateTrackedPositions() {
     const nftIds = await getPositions()
     for (const nftId of nftIds) {
         if (!trackedPositions[nftId]) {
             await addTrackedPosition(nftId)
+        }
+    }
+    for (const nftId of Object.values(trackedPositions).map(x => x.nftId)) {
+        if (nftIds.indexOf(nftId) === -1) {
+            delete trackedPositions[nftId];
+            console.log("Remove tracked position", nftId)
         }
     }
 }
@@ -135,7 +134,9 @@ function updateTrackedPosition(nftId, gains, cost) {
     const now = new Date().getTime()
     if (trackedPositions[nftId].lastCheck) {
         const timeElapsedMs = now - trackedPositions[nftId].lastCheck
-        trackedPositions[nftId].gainsPerSec = (gains.sub(trackedPositions[nftId].lastGains).mul(1000)).div(timeElapsedMs)
+        if (gains.gt(0)) {
+            trackedPositions[nftId].gainsPerSec = (gains.sub(trackedPositions[nftId].lastGains).mul(1000)).div(timeElapsedMs)
+        }
     }
     trackedPositions[nftId].lastCheck = now
     trackedPositions[nftId].lastGains = gains
@@ -288,55 +289,14 @@ async function getGasPrice(isEstimation) {
     return await provider.getGasPrice()
 }
 
-async function checkGainsAndTVL() {
-    try {
-        const tokenPriceCache = {}
-        const nftIds = await getPositions()
-        let tvl = BigNumber.from(0)
-        for (const nftId of nftIds) {
-            const trackedPosition = trackedPositions[nftId]
-            if (trackedPosition) {
-                const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
-
-                const poolAddress = await factory.getPool(trackedPosition.token0, trackedPosition.token1, trackedPosition.fee);
-                const poolContract = new ethers.Contract(poolAddress, POOL_RAW.abi, provider)
-                const slot0 = await poolContract.slot0()
-
-                const lowerSqrtPriceX96 = univ3prices.tickMath.getSqrtRatioAtTick(trackedPosition.tickLower)
-                const upperSqrtPriceX96 = univ3prices.tickMath.getSqrtRatioAtTick(trackedPosition.tickUpper)
-                amounts = univ3prices.getAmountsForLiquidityRange(slot0.sqrtPriceX96, lowerSqrtPriceX96, upperSqrtPriceX96, trackedPosition.liquidity)
-
-                tvl = tvl.add(BigNumber.from(amounts[0].toString()).mul(tokenPrice0X96).div(BigNumber.from(2).pow(96))).add(BigNumber.from(amounts[1].toString()).mul(tokenPrice1X96).div(BigNumber.from(2).pow(96)))
-            }
-        }
-
-        const tokenBalances = await getTokenBalances(await signer.getAddress())
-        let gains = BigNumber.from(0)
-        for (const balance of tokenBalances) {
-            const tokenPriceX96 = tokenPriceCache[balance.token] || await getTokenETHPriceX96(balance.token)
-            if (tokenPriceX96) {
-                const gain = BigNumber.from(balance.balance).mul(tokenPriceX96).div(BigNumber.from(2).pow(96))
-                gains = gains.add(gain)
-            }
-        }
-
-        console.log("Gains", ethers.utils.formatEther(gains), nativeTokenName[network])
-        console.log("TVL", ethers.utils.formatEther(tvl), nativeTokenName[network])
-    } catch (err) {
-        console.log("Error loading gains / TVL", err)
-    }
-}
-
 async function autoCompoundPositions() {
 
     const tokenPriceCache = {}
-    const toRemove = []
 
     try {
         let gasPrice = await getGasPrice(true)
-
         console.log("Current gas price", gasPrice.toString())
-
+        
         for (const nftId in trackedPositions) {
 
             const trackedPosition = trackedPositions[nftId]
@@ -407,19 +367,13 @@ async function autoCompoundPositions() {
                     console.log("Autocompounded position", nftId, tx.hash)
                     updateTrackedPosition(nftId, BigNumber.from(0), result.cost)
                 } else {
-                    updateTrackedPosition(nftId, result.gains, result.cost, null)
+                    updateTrackedPosition(nftId, result.gains, result.cost)
                 }
             } else {
-                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit.mul(gasPrice), null)
+                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit.mul(gasPrice))
                 console.log("Error calculating", nftId, resultA.message)
             }
         }
-
-        // remove errored positions - usually happens because they were removed
-        toRemove.forEach(nftId => {
-            console.log("Removed tracked position", nftId)
-            delete trackedPositions[nftId]
-        })
     } catch (err) {
         console.log("Error during autocompound", err)
     }
@@ -429,13 +383,9 @@ async function autoCompoundPositions() {
 }
 
 async function run() {
-
     await updateTrackedPositions()
     await autoCompoundPositions()
-    //await checkGainsAndTVL()
-    
     setInterval(async () => { await updateTrackedPositions() }, updatePositionsInterval);
-    //setInterval(async () => { await checkGainsAndTVL() }, checkGainsInterval);
 }
 
 run()
