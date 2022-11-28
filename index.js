@@ -159,7 +159,7 @@ async function getTokenETHPricesX96(position, cache) {
         const poolContract = new ethers.Contract(poolAddress, POOL_RAW.abi, provider)
         const slot0 = await poolContract.slot0()
         const priceX96 = slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96))
-        return [tokenPrice0X96 || tokenPrice1X96.mul(priceX96).div(BigNumber.from(2).pow(96)), tokenPrice1X96 || tokenPrice0X96.mul(BigNumber.from(2).pow(96)).div(priceX96)]
+        return [tokenPrice0X96 || tokenPrice1X96.mul(priceX96).div(BigNumber.from(2).pow(96)), tokenPrice1X96 || (priceX96.gt(0) ? tokenPrice0X96.mul(BigNumber.from(2).pow(96)).div(priceX96) : BigNumber.from(0))]
     } else {
         console.log("Couldn't find prices for position", position.token0, position.token1, position.fee)
         return [BigNumber.from(0), BigNumber.from(0)]
