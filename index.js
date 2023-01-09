@@ -13,9 +13,8 @@ const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
 const checkInterval = 30000 // quick check each 30 secs
-const forceCheckInterval = 60000 * 60 // update each 60 mins
+const forceCheckInterval = 60000 * 60 * 12 // force check each 12 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
-const checkGainsInterval = 60000 * 60 // each hour check balances
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(1000000)
