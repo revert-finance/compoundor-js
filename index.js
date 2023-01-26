@@ -12,7 +12,9 @@ const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
-const checkInterval = 30000 // quick check each 30 secs
+const firstCheckInterval = 60000 * 60 // wait for one hour after first run to get accurate feesPerSecond values
+const checkInterval = 60000 // quick check each 60 secs
+
 const forceCheckInterval = 60000 * 60 * 12 // force check each 12 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
@@ -23,12 +25,6 @@ const maxGasLimitArbitrum = BigNumber.from(2000000)
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
 
-const nativeTokenName = {
-    "mainnet": "ETH",
-    "polygon": "MATIC",
-    "optimism": "ETH",
-    "arbitrum": "ETH"
-}
 const nativeTokenAddresses = {
     "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     "polygon": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
@@ -110,7 +106,7 @@ async function getPositions() {
 
 async function updateTrackedPositions() {
     const nftIds = await getPositions()
-    for (const nftId of nftIds) {
+    for (const nftId of nftIds.filter(id => id == 296335)) {
         if (!trackedPositions[nftId]) {
             await addTrackedPosition(nftId)
         }
@@ -129,17 +125,19 @@ async function addTrackedPosition(nftId) {
     trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
 }
 
-function updateTrackedPosition(nftId, gains, cost) {
+function updateTrackedPosition(nftId, gains, gasLimit) {
     const now = new Date().getTime()
+
+    // only update gains per sec when data available
     if (trackedPositions[nftId].lastCheck) {
         const timeElapsedMs = now - trackedPositions[nftId].lastCheck
-        if (gains.gt(0)) {
+        if (gains.gt(trackedPositions[nftId].lastGains)) {
             trackedPositions[nftId].gainsPerSec = (gains.sub(trackedPositions[nftId].lastGains).mul(1000)).div(timeElapsedMs)
         }
     }
     trackedPositions[nftId].lastCheck = now
     trackedPositions[nftId].lastGains = gains
-    trackedPositions[nftId].lastCost = cost
+    trackedPositions[nftId].lastGasLimit = gasLimit
 }
 
 async function getTokenETHPricesX96(position, cache) {
@@ -236,7 +234,7 @@ function needsCheck(trackedPosition, gasPrice) {
     const estimatedGains = (trackedPosition.gainsPerSec || BigNumber.from(0)).mul(BigNumber.from(timeElapsedMs).div(1000))
 
     // if its ready with current gas price - check
-    if (isReady(trackedPosition.lastGains.add(estimatedGains), gasPrice.mul(trackedPosition.lastCost))) {
+    if (isReady(trackedPosition.lastGains.add(estimatedGains), gasPrice.mul(trackedPosition.lastGasLimit))) {
         return true;
     }
     // if it hasnt been checked for a long time - check
@@ -288,13 +286,13 @@ async function getGasPrice(isEstimation) {
     return await provider.getGasPrice()
 }
 
-async function autoCompoundPositions() {
+async function autoCompoundPositions(runNumber = 0) {
 
     const tokenPriceCache = {}
 
     try {
         let gasPrice = await getGasPrice(true)
-        console.log("Current gas price", gasPrice.toString())
+        console.log("Run", runNumber, "Current gas price", gasPrice.toString())
 
         for (const nftId of Object.keys(trackedPositions)) {
 
@@ -304,7 +302,8 @@ async function autoCompoundPositions() {
                 continue;
             }
 
-            if (!needsCheck(trackedPosition, gasPrice)) {
+            // first two times - must be all positions
+            if (runNumber >= 2 && !needsCheck(trackedPosition, gasPrice)) {
                 continue;
             }
 
@@ -368,12 +367,12 @@ async function autoCompoundPositions() {
                     lastTxNonce = tx.nonce
 
                     console.log("Autocompounded position", nftId, tx.hash)
-                    updateTrackedPosition(nftId, BigNumber.from(0), result.cost)
+                    updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
                 } else {
-                    updateTrackedPosition(nftId, result.gains, result.cost)
+                    updateTrackedPosition(nftId, result.gains, result.gasLimit)
                 }
             } else {
-                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit.mul(gasPrice))
+                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
                 console.log("Error calculating", nftId, resultA.message)
             }
         }
@@ -381,8 +380,7 @@ async function autoCompoundPositions() {
         console.log("Error during autocompound", err)
     }
 
-    setTimeout(async () => { await autoCompoundPositions() }, checkInterval);
-
+    setTimeout(async () => { await autoCompoundPositions(runNumber + 1) }, runNumber == 0 ? firstCheckInterval : checkInterval);
 }
 
 async function run() {
