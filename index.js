@@ -370,10 +370,11 @@ async function autoCompoundPositions(runNumber = 0) {
                             params.gasPrice = gasPrice
                         }
 
-                        // if there is a pending tx - check if added - if not 
+                        // if there is a pending tx - check if added - if not overwrite with new gas value
                         if (lastTxHash) {
-                            const txReceipt = await provider.getTransactionReceipt(lastTxHash);
-                            if (txReceipt && txReceipt.blockNumber) {
+                            const txReceipt = await provider.getTransactionReceipt(lastTxHash)
+                            const txCount = await provider.getTransactionCount()
+                            if ((txReceipt && txReceipt.blockNumber) || txCount > lastTxNonce) {
                                 lastTxHash = null
                                 lastTxNonce = null
                             } else {
