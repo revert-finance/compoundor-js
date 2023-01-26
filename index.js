@@ -229,6 +229,17 @@ function isReady(gains, cost) {
 }
 
 function needsCheck(trackedPosition, gasPrice) {
+
+    // if it hasnt been checked for a long time - check
+    if (new Date().getTime() - trackedPosition.lastCheck > forceCheckInterval) {
+        return true
+    }
+
+    // if no liquity no check 
+    if (trackedPosition.liquidity.eq(0)) {
+        return false;
+    }
+
     // if it hasnt been checked before
     if (!trackedPosition.lastCheck) {
         return true;
@@ -241,10 +252,7 @@ function needsCheck(trackedPosition, gasPrice) {
     if (isReady(trackedPosition.lastGains.add(estimatedGains), gasPrice.mul(trackedPosition.lastGasLimit))) {
         return true;
     }
-    // if it hasnt been checked for a long time - check
-    if (new Date().getTime() - trackedPosition.lastCheck > forceCheckInterval) {
-        return true
-    }
+
     return false;
 }
 
@@ -311,73 +319,83 @@ async function autoCompoundPositions(runNumber = 0) {
                 continue;
             }
 
-            // update gas price to latest
-            gasPrice = await getGasPrice(true)
-            const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
+            // check if liquidity is really 0
+            if (trackedPosition.liquidity.eq(0)) {
+                const position = await npm.positions(nftId)
+                trackedPosition.liquidity = position.liquidity
+            }
 
-            const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
-            const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1)
+            // only check positions with liquidity
+            if (trackedPosition.liquidity.gt(0)) {
 
-            // if none prefered token found - keep original tokens - otherwise convert to first one in list
-            const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
+                // update gas price to latest
+                gasPrice = await getGasPrice(true)
+                const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
-            // dont withdraw reward for now
-            const withdrawReward = false
+                const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
+                const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1)
 
-            // try with and without swap
-            const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
-            const resultB = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
+                // if none prefered token found - keep original tokens - otherwise convert to first one in list
+                const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
 
-            if (!resultA.error || !resultB.error) {
-                let result = null
-                if (!resultA.error && !resultB.error) {
-                    result = resultA.gains.sub(resultA.cost).gt(resultB.gains.sub(resultB.cost)) ? resultA : resultB
-                } else if (!resultA.error) {
-                    result = resultA
-                } else {
-                    result = resultB
-                }
+                // dont withdraw reward for now
+                const withdrawReward = false
 
-                console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
+                // try with and without swap
+                const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
+                const resultB = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
 
-                if (isReady(result.gains, result.cost)) {
-                    const params = { gasLimit: result.gasLimit.mul(11).div(10) }
-                    if (network == "mainnet") {
-                        // mainnet EIP-1559 handling
-                        const feeData = await provider.getFeeData()
-                        params.maxFeePerGas = feeData.maxFeePerGas
-                        params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
-                    } else if (network == "optimism") {
-                        params.gasPrice = await getGasPrice(false)
+                if (!resultA.error || !resultB.error) {
+                    let result = null
+                    if (!resultA.error && !resultB.error) {
+                        result = resultA.gains.sub(resultA.cost).gt(resultB.gains.sub(resultB.cost)) ? resultA : resultB
+                    } else if (!resultA.error) {
+                        result = resultA
                     } else {
-                        params.gasPrice = gasPrice
+                        result = resultB
                     }
 
-                    // if there is a pending tx - check if added - if not 
-                    if (lastTxHash) {
-                        const txReceipt = await provider.getTransactionReceipt(lastTxHash);
-                        if (txReceipt && txReceipt.blockNumber) {
-                            lastTxHash = null
-                            lastTxNonce = null
+                    console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
+
+                    if (isReady(result.gains, result.cost)) {
+                        const params = { gasLimit: result.gasLimit.mul(11).div(10) }
+                        if (network == "mainnet") {
+                            // mainnet EIP-1559 handling
+                            const feeData = await provider.getFeeData()
+                            params.maxFeePerGas = feeData.maxFeePerGas
+                            params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
+                        } else if (network == "optimism") {
+                            params.gasPrice = await getGasPrice(false)
                         } else {
-                            console.log("Overwrite tx with nonce", lastTxNonce)
-                            params.nonce = lastTxNonce
+                            params.gasPrice = gasPrice
                         }
+
+                        // if there is a pending tx - check if added - if not 
+                        if (lastTxHash) {
+                            const txReceipt = await provider.getTransactionReceipt(lastTxHash);
+                            if (txReceipt && txReceipt.blockNumber) {
+                                lastTxHash = null
+                                lastTxNonce = null
+                            } else {
+                                console.log("Overwrite tx with nonce", lastTxNonce)
+                                params.nonce = lastTxNonce
+                            }
+                        }
+
+                        const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
+
+                        lastTxHash = tx.hash
+                        lastTxNonce = tx.nonce
+
+                        console.log("Autocompounded position", nftId, tx.hash)
+                        updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
+                    } else {
+                        updateTrackedPosition(nftId, result.gains, result.gasLimit)
                     }
-
-                    const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
-
-                    lastTxHash = tx.hash
-                    lastTxNonce = tx.nonce
-
-                    console.log("Autocompounded position", nftId, tx.hash)
-                    updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
                 } else {
-                    updateTrackedPosition(nftId, result.gains, result.gasLimit)
+                    updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
+                    console.log("Error calculating", nftId, resultA.message)
                 }
-            } else {
-                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
-                console.log("Error calculating", nftId, resultA.message)
             }
         }
     } catch (err) {
