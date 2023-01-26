@@ -230,6 +230,11 @@ function isReady(gains, cost) {
 
 function needsCheck(trackedPosition, gasPrice) {
 
+    // if it hasnt been checked before
+    if (!trackedPosition.lastCheck) {
+        return true;
+    }
+
     // if it hasnt been checked for a long time - check
     if (new Date().getTime() - trackedPosition.lastCheck > forceCheckInterval) {
         return true
@@ -238,11 +243,6 @@ function needsCheck(trackedPosition, gasPrice) {
     // if no liquity no check 
     if (trackedPosition.liquidity.eq(0)) {
         return false;
-    }
-
-    // if it hasnt been checked before
-    if (!trackedPosition.lastCheck) {
-        return true;
     }
 
     const timeElapsedMs = new Date().getTime() - trackedPosition.lastCheck
@@ -396,6 +396,8 @@ async function autoCompoundPositions(runNumber = 0) {
                     updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
                     console.log("Error calculating", nftId, resultA.message)
                 }
+            } else {
+                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
             }
         }
     } catch (err) {
