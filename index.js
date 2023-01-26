@@ -125,7 +125,7 @@ async function sendDiscordInfo(msg) {
 }
 
 async function sendDiscordAlert(msg) {
-    await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL_ALERT)
+    await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL)
 }
 
 async function sendDiscordMessage(msg, channel) {
@@ -322,114 +322,129 @@ async function getGasPrice(isEstimation) {
 }
 
 async function autoCompoundPositions(runNumber = 0) {
-
-    const tokenPriceCache = {}
-
     try {
+        const tokenPriceCache = {}
+        let errorCount = 0
+
         let gasPrice = await getGasPrice(true)
         console.log("Run", runNumber, "Current gas price", gasPrice.toString())
 
         for (const nftId of Object.keys(trackedPositions)) {
 
-            const trackedPosition = trackedPositions[nftId]
+            try {
 
-            if (!trackedPosition) {
-                continue;
-            }
+                const trackedPosition = trackedPositions[nftId]
 
-            // first two times - must be all positions
-            if (runNumber >= 2 && !needsCheck(trackedPosition, gasPrice)) {
-                continue;
-            }
+                if (!trackedPosition) {
+                    continue;
+                }
 
-            // check if liquidity is really 0
-            if (trackedPosition.liquidity.eq(0)) {
-                const position = await npm.positions(nftId)
-                trackedPosition.liquidity = position.liquidity
-            }
+                // first two times - must be all positions
+                if (runNumber >= 2 && !needsCheck(trackedPosition, gasPrice)) {
+                    continue;
+                }
 
-            // only check positions with liquidity
-            if (trackedPosition.liquidity.gt(0)) {
+                // check if liquidity is really 0
+                if (trackedPosition.liquidity.eq(0)) {
+                    const position = await npm.positions(nftId)
+                    trackedPosition.liquidity = position.liquidity
+                }
 
-                // update gas price to latest
-                gasPrice = await getGasPrice(true)
-                const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
+                // only check positions with liquidity
+                if (trackedPosition.liquidity.gt(0)) {
 
-                const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
-                const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1)
+                    // update gas price to latest
+                    gasPrice = await getGasPrice(true)
+                    const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
-                // if none prefered token found - keep original tokens - otherwise convert to first one in list
-                const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
+                    const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
+                    const indexOf1 = preferedRewardToken.indexOf(trackedPosition.token1)
 
-                // dont withdraw reward for now
-                const withdrawReward = false
+                    // if none prefered token found - keep original tokens - otherwise convert to first one in list
+                    const rewardConversion = indexOf0 === -1 && indexOf1 == -1 ? 0 : (indexOf0 === -1 ? 2 : (indexOf1 === -1 ? 1 : (indexOf0 < indexOf1 ? 1 : 2)))
 
-                // try with and without swap
-                const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
-                const resultB = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
+                    // dont withdraw reward for now
+                    const withdrawReward = false
 
-                if (!resultA.error || !resultB.error) {
-                    let result = null
-                    if (!resultA.error && !resultB.error) {
-                        result = resultA.gains.sub(resultA.cost).gt(resultB.gains.sub(resultB.cost)) ? resultA : resultB
-                    } else if (!resultA.error) {
-                        result = resultA
-                    } else {
-                        result = resultB
-                    }
+                    // try with and without swap
+                    const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
+                    const resultB = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, false, gasPrice, tokenPrice0X96, tokenPrice1X96)
 
-                    console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
-
-                    if (isReady(result.gains, result.cost)) {
-                        const params = { gasLimit: result.gasLimit.mul(11).div(10) }
-                        if (network == "mainnet") {
-                            // mainnet EIP-1559 handling
-                            const feeData = await provider.getFeeData()
-                            params.maxFeePerGas = feeData.maxFeePerGas
-                            params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
-                        } else if (network == "optimism") {
-                            params.gasPrice = await getGasPrice(false)
+                    if (!resultA.error || !resultB.error) {
+                        let result = null
+                        if (!resultA.error && !resultB.error) {
+                            result = resultA.gains.sub(resultA.cost).gt(resultB.gains.sub(resultB.cost)) ? resultA : resultB
+                        } else if (!resultA.error) {
+                            result = resultA
                         } else {
-                            params.gasPrice = gasPrice
+                            result = resultB
                         }
 
-                        // if there is a pending tx - check if added - if not overwrite with new gas value
-                        if (lastTxHash) {
-                            const txReceipt = await provider.getTransactionReceipt(lastTxHash)
-                            const txCount = await provider.getTransactionCount()
-                            if ((txReceipt && txReceipt.blockNumber) || txCount > lastTxNonce) {
-                                lastTxHash = null
-                                lastTxNonce = null
+                        console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
+
+                        if (isReady(result.gains, result.cost)) {
+                            const params = { gasLimit: result.gasLimit.mul(11).div(10) }
+                            if (network == "mainnet") {
+                                // mainnet EIP-1559 handling
+                                const feeData = await provider.getFeeData()
+                                params.maxFeePerGas = feeData.maxFeePerGas
+                                params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
+                            } else if (network == "optimism") {
+                                params.gasPrice = await getGasPrice(false)
                             } else {
-                                console.log("Overwrite tx with nonce", lastTxNonce)
-                                params.nonce = lastTxNonce
+                                params.gasPrice = gasPrice
                             }
+
+                            // if there is a pending tx - check if added - if not overwrite with new gas value
+                            if (lastTxHash) {
+                                const txReceipt = await provider.getTransactionReceipt(lastTxHash)
+                                const txCount = await provider.getTransactionCount(signer.address)
+                                if ((txReceipt && txReceipt.blockNumber) || txCount > lastTxNonce) {
+                                    lastTxHash = null
+                                    lastTxNonce = null
+                                } else {
+                                    console.log("Overwrite tx with nonce", lastTxNonce)
+                                    params.nonce = lastTxNonce
+                                }
+                            }
+
+                            const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
+
+                            await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol}`)
+
+                            lastTxHash = tx.hash
+                            lastTxNonce = tx.nonce
+
+                            console.log("Autocompounded position", nftId, tx.hash)
+                            updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
+                        } else {
+                            updateTrackedPosition(nftId, result.gains, result.gasLimit)
                         }
-
-                        const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
-
-                        await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol}`)
-
-                        lastTxHash = tx.hash
-                        lastTxNonce = tx.nonce
-
-                        console.log("Autocompounded position", nftId, tx.hash)
-                        updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
                     } else {
-                        updateTrackedPosition(nftId, result.gains, result.gasLimit)
+                        updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
+                        console.log("Error calculating", nftId, resultA.message)
                     }
                 } else {
                     updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
-                    console.log("Error calculating", nftId, resultA.message)
                 }
-            } else {
-                updateTrackedPosition(nftId, BigNumber.from(0), defaultGasLimit)
+
+                // reset error counter
+                errorCount = 0
+
+            } catch (err) {
+                errorCount++
+                console.log("Error during autocompound position", nftId, err)
+
+                // if many consecutive errors - stop 
+                if (errorCount >= 10) {
+                    throw err
+                }
             }
         }
     } catch (err) {
+        sendDiscordAlert(`Error during autocompound: ${err}`)
         console.log("Error during autocompound", err)
     }
-
     setTimeout(async () => { await autoCompoundPositions(runNumber + 1) }, runNumber == 0 ? firstCheckInterval : checkInterval);
 }
 
