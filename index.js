@@ -58,6 +58,7 @@ const daiAddresses = {
 
 const network = process.env.NETWORK
 const nativeTokenAddress = nativeTokenAddresses[network]
+const nativeTokenSymbol = network === "polygon" ? "MATIC" : "ETH" 
 
 // order for reward token preference
 const preferedRewardToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
@@ -119,6 +120,28 @@ async function updateTrackedPositions() {
     }
 }
 
+async function sendDiscordInfo(msg) {
+    await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL)
+}
+
+async function sendDiscordAlert(msg) {
+    await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL_ALERT)
+}
+
+async function sendDiscordMessage(msg, channel) {
+    try {
+        const config = {
+            headers: {
+                'Content-Type': 'application/json',
+                "Authorization":`Bot ${process.env.DISCORD_BOT_TOKEN}`
+            }
+        }
+        await axios.post(`https://discordapp.com/api/channels/${channel}/messages`, {"content": msg}, config)
+    } catch (err) {
+        console.log("Error sending to discord", err)
+    }
+}
+   
 async function addTrackedPosition(nftId) {
     try {
         console.log("Add tracked position", nftId)
@@ -384,6 +407,8 @@ async function autoCompoundPositions(runNumber = 0) {
                         }
 
                         const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
+
+                        await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol}`)
 
                         lastTxHash = tx.hash
                         lastTxNonce = tx.nonce
