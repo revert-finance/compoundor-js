@@ -120,9 +120,13 @@ async function updateTrackedPositions() {
 }
 
 async function addTrackedPosition(nftId) {
-    console.log("Add tracked position", nftId)
-    const position = await npm.positions(nftId)
-    trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
+    try {
+        console.log("Add tracked position", nftId)
+        const position = await npm.positions(nftId)
+        trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
+    } catch (err) {
+        console.log("Error adding tracked position", nftId, err)
+    }
 }
 
 function updateTrackedPosition(nftId, gains, gasLimit) {
