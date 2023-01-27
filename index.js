@@ -360,6 +360,7 @@ async function autoCompoundPositions(runNumber = 0) {
     try {
         const tokenPriceCache = {}
         let errorCount = 0
+        let compoundErrorCount = 0
 
         let gasPrice = await getGasPrice(true)
         console.log("Run", runNumber, "Current gas price", gasPrice.toString())
@@ -444,8 +445,12 @@ async function autoCompoundPositions(runNumber = 0) {
                                 }
                             }
 
+                            compoundErrorCount++
+
                             const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
                             await waitWithTimeout(tx, txWaitMs[network])
+
+                            compoundErrorCount = 0
 
                             await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
 
@@ -475,6 +480,9 @@ async function autoCompoundPositions(runNumber = 0) {
 
                 // if many consecutive errors - stop 
                 if (errorCount >= 10) {
+                    throw err
+                }
+                if (compoundErrorCount >= 5) {
                     throw err
                 }
             }
