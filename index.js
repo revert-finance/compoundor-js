@@ -431,6 +431,7 @@ async function autoCompoundPositions(runNumber = 0) {
                             lastTxNonce = tx.nonce
 
                             console.log("Autocompounded position", nftId, tx.hash)
+                            updateTrackedPosition(nftId, result.gains, result.gasLimit)
                             updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
                         } else {
                             updateTrackedPosition(nftId, result.gains, result.gasLimit)
