@@ -16,11 +16,11 @@ const firstCheckInterval = 60000 * 60 // wait for one hour after first run to ge
 const checkInterval = 60000 // quick check each 60 secs
 
 const forceCheckInterval = 60000 * 60 * 12 // force check each 12 hours
+const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
 const defaultGasLimit = BigNumber.from(500000)
-const maxGasLimit = BigNumber.from(1000000)
-const maxGasLimitArbitrum = BigNumber.from(2000000)
+const maxGasLimit = BigNumber.from(5000000)
 
 const factoryAddress = "0x1F98431c8aD98523631AE4a59f267346ea31F984"
 const npmAddress = "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
@@ -60,6 +60,12 @@ const txWaitMs = {
     "polygon": 5000,
     "optimism": 3000,
     "arbitrum": 3000
+}
+const lowAlertBalances = {
+    "mainnet": BigNumber.from("100000000000000000"),  // 0.1 ETH
+    "polygon": BigNumber.from("10000000000000000000"), // 10 MATIC
+    "optimism": BigNumber.from("10000000000000000"), // 0.01 ETH
+    "arbitrum": BigNumber.from("10000000000000000")  // 0.01 ETH
 }
 
 const network = process.env.NETWORK
@@ -115,26 +121,43 @@ async function getPositions() {
 }
 
 async function updateTrackedPositions() {
-    const nftIds = await getPositions()
-    for (const nftId of nftIds) {
-        if (!trackedPositions[nftId]) {
-            await addTrackedPosition(nftId)
+    try {
+        const nftIds = await getPositions()
+        for (const nftId of nftIds) {
+            if (!trackedPositions[nftId]) {
+                await addTrackedPosition(nftId)
+            }
         }
-    }
-    for (const nftId of Object.values(trackedPositions).map(x => x.nftId)) {
-        if (nftIds.indexOf(nftId) === -1) {
-            delete trackedPositions[nftId];
-            console.log("Remove tracked position", nftId)
+        for (const nftId of Object.values(trackedPositions).map(x => x.nftId)) {
+            if (nftIds.indexOf(nftId) === -1) {
+                delete trackedPositions[nftId];
+                console.log("Remove tracked position", nftId)
+            }
         }
+    } catch (err) {
+        console.log("Error in updateTrackedPositions", err)
     }
 }
+
+
+async function checkBalances() {
+    try {
+        const balance = await provider.getBalance(signer.address);
+        if (balance.lt(lowAlertBalances[network])) {
+            await sendDiscordAlert(`LOW BALANCE on ${network} ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol}`)
+        }
+    } catch (err) {
+        console.log("Error in checkBalances", err)
+    }
+}
+
 
 async function sendDiscordInfo(msg) {
     await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL)
 }
 
 async function sendDiscordAlert(msg) {
-    await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL)
+    await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL_ALERT)
 }
 
 async function sendDiscordMessage(msg, channel) {
@@ -152,13 +175,9 @@ async function sendDiscordMessage(msg, channel) {
 }
    
 async function addTrackedPosition(nftId) {
-    try {
-        console.log("Add tracked position", nftId)
-        const position = await npm.positions(nftId)
-        trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
-    } catch (err) {
-        console.log("Error adding tracked position", nftId, err)
-    }
+    console.log("Add tracked position", nftId)
+    const position = await npm.positions(nftId)
+    trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
 }
 
 function updateTrackedPosition(nftId, gains, gasLimit) {
@@ -302,7 +321,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
             gasLimit = await contract.connect(signer).estimateGas.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap })
 
             // to high cost - skip
-            if (network !== "arbitrum" && gasLimit.gt(maxGasLimit) || network === "arbitrum" && gasLimit.gt(maxGasLimitArbitrum)) {
+            if (gasLimit.gt(maxGasLimit)) {
                 return { error: true, message: "Gas cost exceeded" }
             }
 
@@ -369,8 +388,6 @@ async function autoCompoundPositions(runNumber = 0) {
                 // only check positions with liquidity
                 if (trackedPosition.liquidity.gt(0)) {
 
-                    // update gas price to latest
-                    gasPrice = await getGasPrice(true)
                     const [tokenPrice0X96, tokenPrice1X96] = await getTokenETHPricesX96(trackedPosition, tokenPriceCache)
 
                     const indexOf0 = preferedRewardToken.indexOf(trackedPosition.token0)
@@ -381,6 +398,9 @@ async function autoCompoundPositions(runNumber = 0) {
 
                     // dont withdraw reward for now
                     const withdrawReward = false
+
+                    // update gas price to latest
+                    gasPrice = await getGasPrice(true)
 
                     // try with and without swap
                     const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
@@ -460,16 +480,18 @@ async function autoCompoundPositions(runNumber = 0) {
             }
         }
     } catch (err) {
-        sendDiscordAlert(`Error during autocompound: ${err}`)
+        await sendDiscordAlert(`Error during autocompound: ${err}`)
         console.log("Error during autocompound", err)
     }
     setTimeout(async () => { await autoCompoundPositions(runNumber + 1) }, runNumber == 0 ? firstCheckInterval : checkInterval);
 }
 
 async function run() {
+    await checkBalances()
     await updateTrackedPositions()
     await autoCompoundPositions()
     setInterval(async () => { await updateTrackedPositions() }, updatePositionsInterval);
+    setInterval(async () => { await checkBalances() }, checkBalancesInterval);
 }
 
 run()
