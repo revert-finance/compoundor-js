@@ -98,15 +98,17 @@ const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/comp
 async function getPositions() {
 
     const tokens = []
-    let skip = 0
     const take = 1000
     let result
+    let currentId = ""
     do {
         result = await axios.post(graphApiUrl, {
-            query: "{ tokens(where: { account_not: null}, first: " + take + ", skip: " + skip + ") { id } }"
+            query: `{ tokens(where: { account_not: null, id_gt: "${currentId}"}, first: ${take}, orderBy: id) { id } }`
         })
-        skip += take
         tokens.push(...result.data.data.tokens.map(t => parseInt(t.id, 10)))
+        if (result.data.data.tokens.length == take) {
+            currentId = result.data.data.tokens[result.data.data.tokens.length - 1].id // paging by id
+        }
     } while (result.data.data.tokens.length == take)
   
     return tokens
