@@ -488,7 +488,7 @@ async function autoCompoundPositions(runNumber = 0) {
             }
         }
     } catch (err) {
-        await sendDiscordAlert(`Error during autocompound: ${err}`)
+        await sendDiscordAlert(`Error on ${network}: ${err}`)
         console.log("Error during autocompound", err)
     }
     setTimeout(async () => { await autoCompoundPositions(runNumber + 1) }, runNumber == 0 ? firstCheckInterval : checkInterval);
