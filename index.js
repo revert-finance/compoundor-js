@@ -410,7 +410,7 @@ async function autoCompoundPositions(runNumber = 0) {
 
                             const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
 
-                            await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol}`)
+                            await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
 
                             lastTxHash = tx.hash
                             lastTxNonce = tx.nonce
