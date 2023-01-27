@@ -55,10 +55,17 @@ const daiAddresses = {
     "optimism": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
     "arbitrum": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1"
 }
+const txWaitMs = {
+    "mainnet": 20000,
+    "polygon": 5000,
+    "optimism": 3000,
+    "arbitrum": 3000
+}
 
 const network = process.env.NETWORK
 const nativeTokenAddress = nativeTokenAddresses[network]
 const nativeTokenSymbol = network === "polygon" ? "MATIC" : "ETH" 
+
 
 // order for reward token preference
 const preferedRewardToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
@@ -321,6 +328,13 @@ async function getGasPrice(isEstimation) {
     return await provider.getGasPrice()
 }
 
+async function waitWithTimeout(tx, timeoutMs) {
+    return new Promise((resolve, reject) => {
+        tx.wait(1).then(() => resolve())
+        setTimeout(() => reject(), timeoutMs)
+    })
+}
+
 async function autoCompoundPositions(runNumber = 0) {
     try {
         const tokenPriceCache = {}
@@ -409,6 +423,7 @@ async function autoCompoundPositions(runNumber = 0) {
                             }
 
                             const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
+                            await waitWithTimeout(tx, txWaitMs[network])
 
                             await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
 
