@@ -8,6 +8,7 @@ const BigNumber = ethers.BigNumber;
 
 const IERC20_ABI = require("./contracts/IERC20.json")
 const CONTRACT_RAW = require("./contracts/Compoundor.json")
+const MULTI_RAW = require("./contracts/MultiCompoundor.json")
 const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
@@ -19,6 +20,7 @@ const forceCheckInterval = 60000 * 60 * 12 // force check each 12 hours
 const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
+const minMultiGainCostPercent = BigNumber.from(process.env.MULTI_COMPOUND_PERCENTAGE || "1000")
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(5000000)
 
@@ -70,7 +72,7 @@ const lowAlertBalances = {
 
 const network = process.env.NETWORK
 const nativeTokenAddress = nativeTokenAddresses[network]
-const nativeTokenSymbol = network === "polygon" ? "MATIC" : "ETH" 
+const nativeTokenSymbol = network === "polygon" ? "MATIC" : "ETH"
 
 
 // order for reward token preference
@@ -86,8 +88,12 @@ if (network === "polygon") {
 }
 
 const contractAddress = "0x5411894842e610c4d0f6ed4c232da689400f94a1"
-
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
+
+const useMultiCompoundor = network === "optimism"
+const multiCompoundorAddress = "0xbDd1D443118554fEb151406622a3B586992b49D3"
+const multiCompoundor = new ethers.Contract(multiCompoundorAddress, MULTI_RAW.abi, provider)
+
 const factory = new ethers.Contract(factoryAddress, FACTORY_RAW.abi, provider)
 const npm = new ethers.Contract(npmAddress, NPM_RAW.abi, provider)
 
@@ -98,6 +104,8 @@ const pricePoolCache = {}
 
 let lastTxHash = null
 let lastTxNonce = null
+let errorCount = 0
+let compoundErrorCount = 0
 
 const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-" + network
 
@@ -165,10 +173,10 @@ async function sendDiscordMessage(msg, channel) {
         const config = {
             headers: {
                 'Content-Type': 'application/json',
-                "Authorization":`Bot ${process.env.DISCORD_BOT_TOKEN}`
+                "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`
             }
         }
-        await axios.post(`https://discordapp.com/api/channels/${channel}/messages`, {"content": msg}, config)
+        await axios.post(`https://discordapp.com/api/channels/${channel}/messages`, { "content": msg }, config)
     } catch (err) {
         console.log("Error sending to discord", err)
     }
@@ -211,7 +219,15 @@ async function getTokenETHPricesX96(position, cache) {
         const poolContract = new ethers.Contract(poolAddress, POOL_RAW.abi, provider)
         const slot0 = await poolContract.slot0()
         const priceX96 = slot0.sqrtPriceX96.pow(2).div(BigNumber.from(2).pow(192 - 96))
-        return [tokenPrice0X96 || tokenPrice1X96.mul(priceX96).div(BigNumber.from(2).pow(96)), tokenPrice1X96 || (priceX96.gt(0) ? tokenPrice0X96.mul(BigNumber.from(2).pow(96)).div(priceX96) : BigNumber.from(0))]
+
+        if (!tokenPrice0X96) {
+            cache[position.token0] = tokenPrice1X96.mul(priceX96).div(BigNumber.from(2).pow(96))
+        }
+        if (!tokenPrice1X96) {
+            cache[position.token1] = (priceX96.gt(0) ? tokenPrice0X96.mul(BigNumber.from(2).pow(96)).div(priceX96) : BigNumber.from(0))
+        }
+
+        return [cache[position.token0], cache[position.token1]]
     } else {
         console.log("Couldn't find prices for position", position.token0, position.token1, position.fee)
         return [BigNumber.from(0), BigNumber.from(0)]
@@ -264,17 +280,17 @@ async function findPricePoolForToken(address) {
                     isToken1WETH = (await poolContract.token1()).toLowerCase() == nativeTokenAddress.toLowerCase();
                 }
             }
-           
+
         }
     }
 
     pricePoolCache[address] = { address: pricePoolAddress, isToken1WETH }
 
-    return pricePoolCache[address] 
+    return pricePoolCache[address]
 }
 
-function isReady(gains, cost) {
-    if (gains.mul(100).div(cost).gte(minGainCostPercent)) {
+function isReady(gains, cost, minPercent) {
+    if (gains.mul(100).div(cost).gte(minPercent)) {
         return true;
     }
 }
@@ -300,7 +316,7 @@ function needsCheck(trackedPosition, gasPrice) {
     const estimatedGains = (trackedPosition.gainsPerSec || BigNumber.from(0)).mul(BigNumber.from(timeElapsedMs).div(1000))
 
     // if its ready with current gas price - check
-    if (isReady(trackedPosition.lastGains.add(estimatedGains), gasPrice.mul(trackedPosition.lastGasLimit))) {
+    if (isReady(trackedPosition.lastGains.add(estimatedGains), gasPrice.mul(trackedPosition.lastGasLimit), minGainCostPercent)) {
         return true;
     }
 
@@ -356,11 +372,96 @@ async function waitWithTimeout(tx, timeoutMs) {
     })
 }
 
+async function createTxParams(gasLimit, gasPrice) {
+
+    // add a bit of extra gaslimit
+    const params = { gasLimit: gasLimit.mul(11).div(10) }
+
+    if (network == "mainnet") {
+        // mainnet EIP-1559 handling
+        const feeData = await provider.getFeeData()
+        params.maxFeePerGas = feeData.maxFeePerGas
+        params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
+    } else if (network == "optimism") {
+        params.gasPrice = await getGasPrice(false)
+    } else {
+        params.gasPrice = gasPrice
+    }
+
+    // if there is a pending tx - check if added - if not overwrite with new gas value
+    if (lastTxHash) {
+        const txReceipt = await provider.getTransactionReceipt(lastTxHash)
+        const txCount = await provider.getTransactionCount(signer.address)
+        if ((txReceipt && txReceipt.blockNumber) || txCount > lastTxNonce) {
+            lastTxHash = null
+            lastTxNonce = null
+        } else {
+            console.log("Overwrite tx with nonce", lastTxNonce)
+            params.nonce = lastTxNonce
+        }
+    }
+
+    return params
+}
+
+async function doMultiCompound(positions, doSwap, rewardConversion) {
+
+    if (positions.length === 0) {
+        return
+    }
+
+    const chunkSize = 50
+    for (let i = 0; i < positions.length; i += chunkSize) {
+        const chunk = positions.slice(i, i + chunkSize)
+
+        const totalGains = chunk.reduce((a, c) => a.add(c.gains), BigNumber.from(0))
+        const gasPrice = await getGasPrice(true)
+        const gasLimit = chunk.reduce((a, c) => a.add(c.gasLimit), BigNumber.from(0))
+
+        // TODO add factor for cost estimating gas limit depending on position count - average for now
+        const estimatingGasLimit = gasLimit.div(chunk.length)
+
+        if (isReady(totalGains, gasPrice.mul(estimatingGasLimit), minMultiGainCostPercent)) {
+            const params = await createTxParams(gasLimit, gasPrice)
+            const nftIds = chunk.map(x => x.nftId)
+
+            compoundErrorCount++
+
+            let tx;
+            if (doSwap) {
+                if (rewardConversion == 1) {
+                    tx = await multiCompoundor.connect(signer).runConv0Swap(nftIds, params)
+                } else {
+                    tx = await multiCompoundor.connect(signer).runConv1Swap(nftIds, params)
+                }
+            } else {
+                if (rewardConversion == 1) {
+                    tx = await multiCompoundor.connect(signer).runConv0NoSwap(nftIds, params)
+                } else {
+                    tx = await multiCompoundor.connect(signer).runConv1NoSwap(nftIds, params)
+                }
+            }
+
+            for (const pos of chunk) {
+                updateTrackedPosition(pos.nftId, BigNumber.from(0), pos.gasLimit)
+            }
+
+            compoundErrorCount = 0
+
+            lastTxHash = tx.hash
+            lastTxNonce = tx.nonce
+
+            await waitWithTimeout(tx, txWaitMs[network])
+
+            await sendDiscordInfo(`Multi-Compounded ${nftIds.length} positions on ${network} ${doSwap ? "" : "non-"}swapping and converting to ${rewardConversion == 1 ? "TOKEN0" : "TOKEN1"}`)
+        }
+    }
+}
+
 async function autoCompoundPositions(runNumber = 0) {
     try {
         const tokenPriceCache = {}
-        let errorCount = 0
-        let compoundErrorCount = 0
+        const multiCompoundable = []
 
         let gasPrice = await getGasPrice(true)
         console.log("Run", runNumber, "Current gas price", gasPrice.toString())
@@ -401,7 +502,9 @@ async function autoCompoundPositions(runNumber = 0) {
                     const withdrawReward = false
 
                     // update gas price to latest
-                    gasPrice = await getGasPrice(true)
+                    if (!useMultiCompoundor) {
+                        gasPrice = await getGasPrice(true)
+                    }
 
                     // try with and without swap
                     const resultA = await calculateCostAndGains(nftId, rewardConversion, withdrawReward, true, gasPrice, tokenPrice0X96, tokenPrice1X96)
@@ -419,47 +522,30 @@ async function autoCompoundPositions(runNumber = 0) {
 
                         console.log("Position progress", nftId, result.gains.mul(100).div(result.cost) + "%")
 
-                        if (isReady(result.gains, result.cost)) {
-                            const params = { gasLimit: result.gasLimit.mul(11).div(10) }
-                            if (network == "mainnet") {
-                                // mainnet EIP-1559 handling
-                                const feeData = await provider.getFeeData()
-                                params.maxFeePerGas = feeData.maxFeePerGas
-                                params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
-                            } else if (network == "optimism") {
-                                params.gasPrice = await getGasPrice(false)
+                        if (isReady(result.gains, result.cost, minGainCostPercent)) {
+
+                            if (!useMultiCompoundor) {
+                                const params = await createTxParams(result.gasLimit, gasPrice)
+
+                                compoundErrorCount++
+
+                                const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
+                                lastTxHash = tx.hash
+                                lastTxNonce = tx.nonce
+
+                                await waitWithTimeout(tx, txWaitMs[network])
+
+                                compoundErrorCount = 0
+
+                                await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
+
+                                console.log("Autocompounded position", nftId, tx.hash)
+                                updateTrackedPosition(nftId, result.gains, result.gasLimit)
+                                updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
                             } else {
-                                params.gasPrice = gasPrice
+                                multiCompoundable.push({ nftId, doSwap: result.doSwap, rewardConversion, gains: result.gains, gasLimit: result.gasLimit })
+                                updateTrackedPosition(nftId, result.gains, result.gasLimit)
                             }
-
-                            // if there is a pending tx - check if added - if not overwrite with new gas value
-                            if (lastTxHash) {
-                                const txReceipt = await provider.getTransactionReceipt(lastTxHash)
-                                const txCount = await provider.getTransactionCount(signer.address)
-                                if ((txReceipt && txReceipt.blockNumber) || txCount > lastTxNonce) {
-                                    lastTxHash = null
-                                    lastTxNonce = null
-                                } else {
-                                    console.log("Overwrite tx with nonce", lastTxNonce)
-                                    params.nonce = lastTxNonce
-                                }
-                            }
-
-                            compoundErrorCount++
-
-                            const tx = await contract.connect(signer).autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap: result.doSwap }, params)
-                            await waitWithTimeout(tx, txWaitMs[network])
-
-                            compoundErrorCount = 0
-
-                            await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
-
-                            lastTxHash = tx.hash
-                            lastTxNonce = tx.nonce
-
-                            console.log("Autocompounded position", nftId, tx.hash)
-                            updateTrackedPosition(nftId, result.gains, result.gasLimit)
-                            updateTrackedPosition(nftId, BigNumber.from(0), result.gasLimit)
                         } else {
                             updateTrackedPosition(nftId, result.gains, result.gasLimit)
                         }
@@ -487,6 +573,21 @@ async function autoCompoundPositions(runNumber = 0) {
                 }
             }
         }
+
+        if (useMultiCompoundor) {
+            const swapConv0 = multiCompoundable.filter(c => c.doSwap && (c.rewardConversion == 0 || c.rewardConversion == 1))
+            await doMultiCompound(swapConv0, true, 1)
+
+            const swapConv1 = multiCompoundable.filter(c => c.doSwap && c.rewardConversion == 2)
+            await doMultiCompound(swapConv1, true, 2)
+
+            const noSwapConv0 = multiCompoundable.filter(c => !c.doSwap && (c.rewardConversion == 0 || c.rewardConversion == 1))
+            await doMultiCompound(noSwapConv0, false, 1)
+
+            const noSwapConv1 = multiCompoundable.filter(c => !c.doSwap && c.rewardConversion == 2)
+            await doMultiCompound(noSwapConv1, false, 2)
+        }
+
     } catch (err) {
         await sendDiscordAlert(`Error on ${network}: ${err}`)
         console.log("Error during autocompound", err)
