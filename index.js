@@ -367,7 +367,7 @@ async function getGasPrice(isEstimation) {
 
 async function waitWithTimeout(tx, timeoutMs) {
     return new Promise((resolve, reject) => {
-        tx.wait(1).then(() => resolve())
+        tx.wait(1).then(() => resolve()).catch(err => reject(err))
         setTimeout(() => resolve(), timeoutMs)
     })
 }
