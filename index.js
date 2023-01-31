@@ -341,7 +341,9 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
                 return { error: true, message: "Gas cost exceeded" }
             }
 
-            [reward0, reward1] = await contract.connect(signer).callStatic.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit: gasLimit.mul(11).div(10) })
+            const res = await contract.connect(signer).callStatic.autoCompound({ tokenId: nftId, rewardConversion, withdrawReward, doSwap }, { gasLimit: gasLimit.mul(11).div(10) })
+            reward0 = res.compounded0.div(100)
+            reward1 = res.compounded1.div(100)
         }
 
         const cost = gasPrice.mul(gasLimit)
