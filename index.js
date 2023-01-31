@@ -13,7 +13,6 @@ const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
-const firstCheckInterval = 60000 * 60 // wait for one hour after first run to get accurate feesPerSecond values
 const checkInterval = 60000 // quick check each 60 secs
 
 const forceCheckInterval = 60000 * 60 * 12 // force check each 12 hours
@@ -455,7 +454,9 @@ async function doMultiCompound(positions, doSwap, rewardConversion) {
 
             await waitWithTimeout(tx, txWaitMs[network])
 
-            await sendDiscordInfo(`Multi-Compounded ${nftIds.length} positions on ${network} ${doSwap ? "" : "non-"}swapping and converting to ${rewardConversion == 1 ? "TOKEN0" : "TOKEN1"}`)
+            const msg = `Multi-Compounded ${nftIds.length} positions on ${network} ${doSwap ? "" : "non-"}swapping and converting to ${rewardConversion == 1 ? "TOKEN0" : "TOKEN1"}`
+            console.log(msg)
+            await sendDiscordInfo(msg)
         }
     }
 }
@@ -478,7 +479,7 @@ async function autoCompoundPositions(runNumber = 0) {
                     continue;
                 }
 
-                // first two times - must be all positions
+                // first two times - must be all positions - to build growthperseconds
                 if (runNumber >= 2 && !needsCheck(trackedPosition, gasPrice)) {
                     continue;
                 }
@@ -594,7 +595,7 @@ async function autoCompoundPositions(runNumber = 0) {
         await sendDiscordAlert(`Error on ${network}: ${err}`)
         console.log("Error during autocompound", err)
     }
-    setTimeout(async () => { await autoCompoundPositions(runNumber + 1) }, runNumber == 0 ? firstCheckInterval : checkInterval);
+    setTimeout(async () => { await autoCompoundPositions(runNumber + 1) }, checkInterval);
 }
 
 async function run() {
