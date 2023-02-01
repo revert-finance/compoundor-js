@@ -443,20 +443,20 @@ async function doMultiCompound(positions, doSwap, rewardConversion) {
                 }
             }
 
-            for (const pos of chunk) {
-                updateTrackedPosition(pos.nftId, BigNumber.from(0), pos.gasLimit)
-            }
-
             compoundErrorCount = 0
 
             lastTxHash = tx.hash
             lastTxNonce = tx.nonce
 
+            for (const pos of chunk) {
+                await sendDiscordInfo(`Compounded position ${pos.nftId} on ${network} for ${ethers.utils.formatEther(pos.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${pos.nftId}`)
+                updateTrackedPosition(pos.nftId, BigNumber.from(0), pos.gasLimit)
+            }
+
             await waitWithTimeout(tx, txWaitMs[network])
 
             const msg = `Multi-Compounded ${nftIds.length} positions on ${network} ${doSwap ? "" : "non-"}swapping and converting to ${rewardConversion == 1 ? "TOKEN0" : "TOKEN1"}`
             console.log(msg)
-            await sendDiscordInfo(msg)
         }
     }
 }
