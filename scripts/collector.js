@@ -33,7 +33,7 @@ async function createTxs(network, owner, execute) {
         calls.push(tx.data)
     }
 
-    if (execute) {
+    if (execute && calls.length > 0) {
         const tx = await contract.connect(signer).multicall(calls)
         console.log(tx)
     }
