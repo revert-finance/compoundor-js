@@ -567,11 +567,10 @@ async function autoCompoundPositions(runNumber = 0) {
                 errorCount++
                 console.log("Error during autocompound position", nftId, err)
 
-                // if many consecutive errors - stop 
-                if (errorCount >= 10) {
-                    throw err
-                }
-                if (compoundErrorCount >= 5) {
+                // if many consecutive errors - stop this run
+                if (errorCount >= 10 || compoundErrorCount >= 5) {
+                    errorCount = 0
+                    compoundErrorCount = 0
                     throw err
                 }
             }
