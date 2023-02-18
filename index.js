@@ -567,6 +567,9 @@ async function autoCompoundPositions(runNumber = 0) {
                 errorCount++
                 console.log("Error during autocompound position", nftId, err)
 
+                // wait 10 secs after each error
+                await new Promise(resolve => setTimeout(resolve, Math.max(errorCount, compoundErrorCount) * 10000));
+
                 // if many consecutive errors - stop this run
                 if (errorCount >= 10 || compoundErrorCount >= 5) {
                     errorCount = 0
