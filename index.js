@@ -13,9 +13,8 @@ const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
-const checkInterval = 60000 // quick check each 60 secs
-
-const forceCheckInterval = 60000 * 60 * 12 // force check each 12 hours
+const checkInterval = 5 * 60000 // quick check each 5 mins
+const forceCheckInterval = 60000 * 60 * 6 // force check each 6 hours
 const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
@@ -195,6 +194,11 @@ function updateTrackedPosition(nftId, gains, gasLimit) {
         const timeElapsedMs = now - trackedPositions[nftId].lastCheck
         if (gains.gt(trackedPositions[nftId].lastGains)) {
             trackedPositions[nftId].gainsPerSec = (gains.sub(trackedPositions[nftId].lastGains).mul(1000)).div(timeElapsedMs)
+        } else {
+            // first time here
+            if (!trackedPositions[nftId].gainsPerSec) {
+                trackedPositions[nftId].gainsPerSec = BigNumber.from(0)
+            }
         }
     }
     trackedPositions[nftId].lastCheck = now
@@ -296,8 +300,8 @@ function isReady(gains, cost, minPercent) {
 
 function needsCheck(trackedPosition, gasPrice) {
 
-    // if it hasnt been checked before
-    if (!trackedPosition.lastCheck) {
+    // if it hasnt been checked twice
+    if (!trackedPosition.lastCheck || !trackedPosition.gainsPerSec) {
         return true;
     }
 
@@ -480,7 +484,7 @@ async function autoCompoundPositions(runNumber = 0) {
                 }
 
                 // first two times - must be all positions - to build growthperseconds
-                if (runNumber >= 2 && !needsCheck(trackedPosition, gasPrice)) {
+                if (!needsCheck(trackedPosition, gasPrice)) {
                     continue;
                 }
 
