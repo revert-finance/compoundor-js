@@ -13,8 +13,9 @@ const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
-const checkInterval = 5 * 60000 // quick check each 5 mins
-const forceCheckInterval = 60000 * 60 * 6 // force check each 6 hours
+const checkInterval = 60000 // quick check each minute
+const secondCheckInterval = 60000 * 15 // second check after 15 minutes to estimate fees
+const forceCheckInterval = 60000 * 60 * 6 // force check each 4 hours
 const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
@@ -129,7 +130,7 @@ async function getPositions() {
 async function updateTrackedPositions() {
     try {
         const nftIds = await getPositions()
-        for (const nftId of nftIds) {
+        for (const nftId of nftIds.filter(i => i == 343933)){
             if (!trackedPositions[nftId]) {
                 await addTrackedPosition(nftId)
             }
@@ -300,9 +301,14 @@ function isReady(gains, cost, minPercent) {
 
 function needsCheck(trackedPosition, gasPrice) {
 
-    // if it hasnt been checked twice
-    if (!trackedPosition.lastCheck || !trackedPosition.gainsPerSec) {
+    // if it hasnt been checked
+    if (!trackedPosition.lastCheck) {
         return true;
+    }
+
+    // if it hasnt been checked twice and has liquidity
+    if (!trackedPosition.gainsPerSec && trackedPosition.liquidity.gt(0) && new Date().getTime() - trackedPosition.lastCheck > secondCheckInterval) {
+        return true
     }
 
     // if it hasnt been checked for a long time - check
