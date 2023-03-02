@@ -1,8 +1,6 @@
 require('dotenv').config()
 const ethers = require("ethers");
 const axios = require('axios');
-const univ3prices = require('@thanpolas/univ3prices')
-
 
 const BigNumber = ethers.BigNumber;
 
@@ -13,6 +11,9 @@ const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
+
+const whaleAmountUSD = 10000 // check more frequently
+const whaleInterval = 60000 * 5 // whales are checked every 5 minutes
 const checkInterval = 60000 // quick check each minute
 const secondCheckInterval = 60000 * 15 // second check after 15 minutes to estimate fees
 const forceCheckInterval = 60000 * 60 * 6 // force check each 4 hours
@@ -107,6 +108,19 @@ let errorCount = 0
 let compoundErrorCount = 0
 
 const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-" + network
+const uniswapGraphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-" + network
+
+async function getPositionValue(id) {
+
+    try {
+        const result = await axios.post(uniswapGraphApiUrl, {
+            query: `{ position(id: "${id}") { amountDepositedUSD amountWithdrawnUSD } }`
+        })
+        return parseFloat(result.data.data.position.amountDepositedUSD) - parseFloat(result.data.data.position.amountWithdrawnUSD)
+    } catch (err) {
+        return 0
+    }
+}
 
 async function getPositions() {
 
@@ -130,7 +144,7 @@ async function getPositions() {
 async function updateTrackedPositions() {
     try {
         const nftIds = await getPositions()
-        for (const nftId of nftIds){
+        for (const nftId of nftIds) {
             if (!trackedPositions[nftId]) {
                 await addTrackedPosition(nftId)
             }
@@ -182,9 +196,10 @@ async function sendDiscordMessage(msg, channel) {
 }
    
 async function addTrackedPosition(nftId) {
-    console.log("Add tracked position", nftId)
     const position = await npm.positions(nftId)
-    trackedPositions[nftId] = { nftId, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
+    const value = position.liquidity.gt(0) ? await getPositionValue(nftId) : 0
+    console.log("Add tracked position", nftId, value)
+    trackedPositions[nftId] = { nftId, value, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
 }
 
 function updateTrackedPosition(nftId, gains, gasLimit) {
@@ -301,13 +316,15 @@ function isReady(gains, cost, minPercent) {
 
 function needsCheck(trackedPosition, gasPrice) {
 
+    const timeElapsedMs = new Date().getTime() - trackedPosition.lastCheck
+
     // if it hasnt been checked
     if (!trackedPosition.lastCheck) {
         return true;
     }
 
     // if it hasnt been checked twice and has liquidity
-    if (!trackedPosition.gainsPerSec && trackedPosition.liquidity.gt(0) && new Date().getTime() - trackedPosition.lastCheck > secondCheckInterval) {
+    if (!trackedPosition.gainsPerSec && trackedPosition.liquidity.gt(0) && timeElapsedMs > secondCheckInterval) {
         return true
     }
 
@@ -321,7 +338,10 @@ function needsCheck(trackedPosition, gasPrice) {
         return false;
     }
 
-    const timeElapsedMs = new Date().getTime() - trackedPosition.lastCheck
+    if (trackedPosition.value >= whaleAmountUSD && timeElapsedMs > whaleInterval) {
+        return true
+    }
+
     const estimatedGains = (trackedPosition.gainsPerSec || BigNumber.from(0)).mul(BigNumber.from(timeElapsedMs).div(1000))
 
     // if its ready with current gas price - check
