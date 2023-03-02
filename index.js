@@ -12,11 +12,11 @@ const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
 
 
-const whaleAmountUSD = 10000 // check more frequently
+const whaleAmountUSD = 50000 // check more frequently
 const whaleInterval = 60000 * 5 // whales are checked every 5 minutes
 const checkInterval = 60000 // quick check each minute
-const secondCheckInterval = 60000 * 15 // second check after 15 minutes to estimate fees
-const forceCheckInterval = 60000 * 60 * 6 // force check each 4 hours
+const secondCheckInterval = 60000 * 60 // second check after 60 minutes to estimate fees
+const forceCheckInterval = 60000 * 60 * 6 // force check each 6 hours
 const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
