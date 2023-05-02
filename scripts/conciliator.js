@@ -6,10 +6,13 @@ const BigNumber = ethers.BigNumber
 
 const IERC20_ABI = require("../contracts/IERC20.json")
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
-const contractAddress = "0x5411894842e610c4d0f6ed4c232da689400f94a1"
 
-async function getBalancesPaged(network) {
-    const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-" + network
+const network = process.env.NETWORK
+
+const contractAddress = network == "evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : ("bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1")
+
+async function getBalancesPaged() {
+    const graphApiUrl = network == "evmos" ? `https://subgraph.satsuma-prod.com/${process.env.SATSUMA_KEY}/revertfinance/compoundor-evmos/api` : `https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-${network}` 
     const balances = []
     const take = 1000
     let result
@@ -33,7 +36,7 @@ async function getBalancesPaged(network) {
 }
 
 async function run() {
-    const balances = await getBalancesPaged(process.env.NETWORK)
+    const balances = await getBalancesPaged()
     const sums = {}
     for (const balance of balances) {
         if (!sums[balance.token]) {

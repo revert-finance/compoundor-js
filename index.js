@@ -26,15 +26,16 @@ const maxGasLimit = BigNumber.from(5000000)
 
 const network = process.env.NETWORK
 
-const factoryAddress = network == "bnb" ? "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7" : "0x1F98431c8aD98523631AE4a59f267346ea31F984"
-const npmAddress = network == "bnb" ? "0x7b8a01b39d58278b5de7e48c8449c9f4f5170613" : "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"
+const factoryAddress = network == "evmos" ? "0xf544365e7065966f190155f629ce0182fc68eaa2" : (network == "bnb" ? "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7" : "0x1F98431c8aD98523631AE4a59f267346ea31F984")
+const npmAddress = network ==  "evmos" ? "0x5fe5daaa011673289847da4f76d63246ddb2965d" : ("bnb" ? "0x7b8a01b39d58278b5de7e48c8449c9f4f5170613" : "0xC36442b4a4522E871399CD717aBDD847Ab11FE88")
 
 const nativeTokenAddresses = {
     "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
     "polygon": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
     "optimism": "0x4200000000000000000000000000000000000006",
     "arbitrum": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
-    "bnb": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c"
+    "bnb": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
+    "evmos": "0xd4949664cd82660aae99bedc034a0dea8a0bd517"
 }
 const wethAddresses = {
     "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
@@ -69,19 +70,21 @@ const txWaitMs = {
     "polygon": 5000,
     "optimism": 3000,
     "arbitrum": 3000,
-    "bnb" : 5000
+    "bnb" : 5000,
+    "evmos" : 5000
 }
 const lowAlertBalances = {
     "mainnet": BigNumber.from("100000000000000000"),  // 0.1 ETH
     "polygon": BigNumber.from("10000000000000000000"), // 10 MATIC
     "optimism": BigNumber.from("10000000000000000"), // 0.01 ETH
     "arbitrum": BigNumber.from("10000000000000000"),  // 0.01 ETH
-    "bnb": BigNumber.from("50000000000000000")  // 0.05 BNB
+    "bnb": BigNumber.from("50000000000000000"),  // 0.05 BNB
+    "evmos": BigNumber.from("10000000000000000000"),  // 10 EVMOS
 }
 
 
 const nativeTokenAddress = nativeTokenAddresses[network]
-const nativeTokenSymbol = network === "polygon" ? "MATIC" : (network === "bnb" ? "BNB" : "ETH")
+const nativeTokenSymbol = network === "evmos" ? "EVMOS" : (network === "polygon" ? "MATIC" : (network === "bnb" ? "BNB" : "ETH"))
 
 
 // order for reward token preference
@@ -96,7 +99,7 @@ if (network === "polygon") {
     provider.getGasPrice = createGetGasPrice('rapid')
 }
 
-const contractAddress = network == "bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1"
+const contractAddress = network == "evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : ("bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1")
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
 
 const useMultiCompoundor = network === "optimism"
@@ -116,8 +119,8 @@ let lastTxNonce = null
 let errorCount = 0
 let compoundErrorCount = 0
 
-const graphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-" + network
-const uniswapGraphApiUrl = "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-" + network
+const graphApiUrl = network == "evmos" ? `https://subgraph.satsuma-prod.com/${process.env.SATSUMA_KEY}/revertfinance/compoundor-evmos/api` : `https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-${network}` 
+const uniswapGraphApiUrl = network == "evmos" ? `https://subgraph.satsuma-prod.com/${process.env.SATSUMA_KEY}/revertfinance/uniswap-v3-evmos/api` : `https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-${network}`
 
 async function getPositionValue(id) {
 
