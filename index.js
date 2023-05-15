@@ -99,7 +99,7 @@ if (network === "polygon") {
     provider.getGasPrice = createGetGasPrice('rapid')
 }
 
-const contractAddress = network == "evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : ("bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1")
+const contractAddress = network == "evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : (network == "bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1")
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
 
 const useMultiCompoundor = network === "optimism"
