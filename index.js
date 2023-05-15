@@ -27,7 +27,7 @@ const maxGasLimit = BigNumber.from(5000000)
 const network = process.env.NETWORK
 
 const factoryAddress = network == "evmos" ? "0xf544365e7065966f190155f629ce0182fc68eaa2" : (network == "bnb" ? "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7" : "0x1F98431c8aD98523631AE4a59f267346ea31F984")
-const npmAddress = network ==  "evmos" ? "0x5fe5daaa011673289847da4f76d63246ddb2965d" : ("bnb" ? "0x7b8a01b39d58278b5de7e48c8449c9f4f5170613" : "0xC36442b4a4522E871399CD717aBDD847Ab11FE88")
+const npmAddress = network ==  "evmos" ? "0x5fe5daaa011673289847da4f76d63246ddb2965d" : (network == "bnb" ? "0x7b8a01b39d58278b5de7e48c8449c9f4f5170613" : "0xC36442b4a4522E871399CD717aBDD847Ab11FE88")
 
 const nativeTokenAddresses = {
     "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
@@ -208,10 +208,14 @@ async function sendDiscordMessage(msg, channel) {
 }
    
 async function addTrackedPosition(nftId) {
-    const position = await npm.positions(nftId)
-    const value = position.liquidity.gt(0) ? await getPositionValue(nftId) : 0
-    console.log("Add tracked position", nftId, value)
-    trackedPositions[nftId] = { nftId, value, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
+    try {
+        const position = await npm.positions(nftId)
+        const value = position.liquidity.gt(0) ? await getPositionValue(nftId) : 0
+        console.log("Add tracked position", nftId, value)
+        trackedPositions[nftId] = { nftId, value, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
+    } catch (err) {
+        console.log("Error adding position", nftId)
+    }
 }
 
 function updateTrackedPosition(nftId, gains, gasLimit) {
