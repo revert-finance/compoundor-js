@@ -407,7 +407,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
 
 async function getGasPrice(isEstimation) {
     if (network == "optimism" && isEstimation) {
-        return (await mainnetProvider.getGasPrice()).div(89) // TODO optimism estimation - for autocompound call - good enough for now
+        return (await mainnetProvider.getGasPrice()).div(191) // TODO optimism estimation - for autocompound call - good enough for now
     }
     return await provider.getGasPrice()
 }
