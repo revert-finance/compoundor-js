@@ -35,7 +35,8 @@ const nativeTokenAddresses = {
     "optimism": "0x4200000000000000000000000000000000000006",
     "arbitrum": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
     "bnb": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-    "evmos": "0xd4949664cd82660aae99bedc034a0dea8a0bd517"
+    "evmos": "0xd4949664cd82660aae99bedc034a0dea8a0bd517",
+    "base": "0x4200000000000000000000000000000000000006",
 }
 const wethAddresses = {
     "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
@@ -71,7 +72,8 @@ const txWaitMs = {
     "optimism": 3000,
     "arbitrum": 3000,
     "bnb" : 5000,
-    "evmos" : 5000
+    "evmos" : 5000,
+    "base": 3000
 }
 const lowAlertBalances = {
     "mainnet": BigNumber.from("100000000000000000"),  // 0.1 ETH
@@ -80,6 +82,7 @@ const lowAlertBalances = {
     "arbitrum": BigNumber.from("10000000000000000"),  // 0.01 ETH
     "bnb": BigNumber.from("50000000000000000"),  // 0.05 BNB
     "evmos": BigNumber.from("10000000000000000000"),  // 10 EVMOS
+    "base": BigNumber.from("10000000000000000"), // 0.01 ETH
 }
 
 
@@ -99,7 +102,7 @@ if (network === "polygon") {
     provider.getGasPrice = createGetGasPrice('rapid')
 }
 
-const contractAddress = network == "evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : (network == "bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1")
+const contractAddress = network == "base" ? "0x4a8c2bdf0d8d2473b985f869815d9caa36a57ee4" : ("evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : (network == "bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1"))
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
 
 const useMultiCompoundor = network === "optimism"
@@ -406,7 +409,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
 }
 
 async function getGasPrice(isEstimation) {
-    if (network == "optimism" && isEstimation) {
+    if ((network === "optimism" || network === "base") && isEstimation) {
         return (await mainnetProvider.getGasPrice()).div(191) // TODO optimism estimation - for autocompound call - good enough for now
     }
     return await provider.getGasPrice()
@@ -429,7 +432,7 @@ async function createTxParams(gasLimit, gasPrice) {
         const feeData = await provider.getFeeData()
         params.maxFeePerGas = feeData.maxFeePerGas
         params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
-    } else if (network == "optimism") {
+    } else if (network == "optimism" || network == "base") {
         params.gasPrice = await getGasPrice(false)
     } else {
         params.gasPrice = gasPrice
