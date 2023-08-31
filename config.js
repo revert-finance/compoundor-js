@@ -184,8 +184,8 @@ const config = {
     },
     "pancakeswap-v3": {
         "bnb": {
-            "factoryAddress": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
-            "npmAddress": "0x03a520b32c04bf3beef7beb72e919cf822ed34f1",
+            "factoryAddress": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
+            "npmAddress": "0x46A15B0b27311cedF172AB29E4f4766fbE7F4364",
             "contractAddress": "0x317202b11add82232d06bc13892cd22e38d505d3",
             "subgraph": `https://api.thegraph.com/subgraphs/name/revert-finance/pancakeswap-v3-bnb`,
             "compoundor-subgraph": `https://api.thegraph.com/subgraphs/name/revert-finance/pancakeswap-v3-compoundor-bnb`
