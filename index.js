@@ -2,6 +2,8 @@ require('dotenv').config()
 const ethers = require("ethers");
 const axios = require('axios');
 
+const config = require('./config');
+
 const BigNumber = ethers.BigNumber;
 
 const IERC20_ABI = require("./contracts/IERC20.json")
@@ -10,7 +12,6 @@ const MULTI_RAW = require("./contracts/MultiCompoundor.json")
 const FACTORY_RAW = require("./contracts/IUniswapV3Factory.json")
 const POOL_RAW = require("./contracts/IUniswapV3Pool.json")
 const NPM_RAW = require("./contracts/INonfungiblePositionManager.json")
-
 
 const whaleAmountUSD = 50000 // check more frequently
 const whaleInterval = 60000 * 5 // whales are checked every 5 minutes
@@ -25,73 +26,19 @@ const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(5000000)
 
 const network = process.env.NETWORK
+const exchange = process.env.EXCHANGE || "uniswap-v3"
 
-const factoryAddress = network == "base" ? "0x33128a8fc17869897dce68ed026d694621f6fdfd" : (network == "evmos" ? "0xf544365e7065966f190155f629ce0182fc68eaa2" : (network == "bnb" ? "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7" : "0x1F98431c8aD98523631AE4a59f267346ea31F984"))
-const npmAddress = network == "base" ? "0x03a520b32c04bf3beef7beb72e919cf822ed34f1" : (network ==  "evmos" ? "0x5fe5daaa011673289847da4f76d63246ddb2965d" : (network == "bnb" ? "0x7b8a01b39d58278b5de7e48c8449c9f4f5170613" : "0xC36442b4a4522E871399CD717aBDD847Ab11FE88"))
+const factoryAddress = config.getConfig(exchange, network, "factoryAddress")
+const npmAddress = config.getConfig(exchange, network, "npmAddress")
 
-const nativeTokenAddresses = {
-    "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    "polygon": "0x0d500b1d8e8ef31e21c99d1db9a6444d3adf1270",
-    "optimism": "0x4200000000000000000000000000000000000006",
-    "arbitrum": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
-    "bnb": "0xbb4cdb9cbd36b01bd1cbaebf2de08d9173bc095c",
-    "evmos": "0xd4949664cd82660aae99bedc034a0dea8a0bd517",
-    "base": "0x4200000000000000000000000000000000000006",
-}
-const wethAddresses = {
-    "mainnet": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
-    "polygon": "0x7ceb23fd6bc0add59e62ac25578270cff1b9f619",
-    "optimism": "0x4200000000000000000000000000000000000006",
-    "arbitrum": "0x82af49447d8a07e3bd95bd0d56f35241523fbab1",
-    "bnb": "0x2170ed0880ac9a755fd29b2688956bd959f933f8"
-}
-const usdcAddresses = {
-    "mainnet": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
-    "polygon": "0x2791bca1f2de4661ed88a30c99a7a9449aa84174",
-    "optimism": "0x7f5c764cbc14f9669b88837ca1490cca17c31607",
-    "arbitrum": "0xff970a61a04b1ca14834a43f5de4533ebddb5cc8",
-    "bnb": "0x8ac76a51cc950d9822d68b83fe1ad97b32cd580d"
-}
-const usdtAddresses = {
-    "mainnet": "0xdac17f958d2ee523a2206206994597c13d831ec7",
-    "polygon": "0xc2132d05d31c914a87c6611c10748aeb04b58e8f",
-    "optimism": "0x94b008aa00579c1307b0ef2c499ad98a8ce58e58",
-    "arbitrum": "0xfd086bc7cd5c481dcc9c85ebe478a1c0b69fcbb9",
-    "bnb": "0x55d398326f99059ff775485246999027b3197955"
-}
-const daiAddresses = {
-    "mainnet": "0x6b175474e89094c44da98b954eedeac495271d0f",
-    "polygon": "0x8f3cf7ad23cd3cadbd9735aff958023239c6a063",
-    "optimism": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
-    "arbitrum": "0xda10009cbd5d07dd0cecc66161fc93d7c9000da1",
-    "bnb": "0x1af3f329e8be154074d8769d1ffa4ee058b1dbc3"
-}
-const txWaitMs = {
-    "mainnet": 20000,
-    "polygon": 5000,
-    "optimism": 3000,
-    "arbitrum": 3000,
-    "bnb" : 5000,
-    "evmos" : 5000,
-    "base": 3000
-}
-const lowAlertBalances = {
-    "mainnet": BigNumber.from("100000000000000000"),  // 0.1 ETH
-    "polygon": BigNumber.from("10000000000000000000"), // 10 MATIC
-    "optimism": BigNumber.from("10000000000000000"), // 0.01 ETH
-    "arbitrum": BigNumber.from("10000000000000000"),  // 0.01 ETH
-    "bnb": BigNumber.from("50000000000000000"),  // 0.05 BNB
-    "evmos": BigNumber.from("10000000000000000000"),  // 10 EVMOS
-    "base": BigNumber.from("10000000000000000"), // 0.01 ETH
-}
+const nativeTokenAddress = config.getConfig(exchange, network, "nativeToken")
+const nativeTokenSymbol = config.getConfig(exchange, network, "nativeTokenSymbol")
 
-
-const nativeTokenAddress = nativeTokenAddresses[network]
-const nativeTokenSymbol = network === "evmos" ? "EVMOS" : (network === "polygon" ? "MATIC" : (network === "bnb" ? "BNB" : "ETH"))
-
+const txWaitMs = config.getConfig(exchange, network, "txWaitMs")
+const lowAlertBalance = config.getConfig(exchange, network, "lowAlertBalance")
 
 // order for reward token preference
-const preferedRewardToken = [nativeTokenAddress, wethAddresses[network], usdcAddresses[network], usdtAddresses[network], daiAddresses[network]]
+const preferedRewardToken = [nativeTokenAddress, config.getConfig(exchange, network, "weth"), config.getConfig(exchange, network, "usdc"), config.getConfig(exchange, network, "usdt"), config.getConfig(exchange, network, "dai")]
 
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
 const mainnetProvider = new ethers.providers.JsonRpcProvider(process.env.MAINNET_RPC_URL)
@@ -102,12 +49,12 @@ if (network === "polygon") {
     provider.getGasPrice = createGetGasPrice('rapid')
 }
 
-const contractAddress = network == "base" ? "0x4a8c2bdf0d8d2473b985f869815d9caa36a57ee4" : ("evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : (network == "bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1"))
+const contractAddress = config.getConfig(exchange, network, "contractAddress")
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
 
-const useMultiCompoundor = network === "optimism"
-const multiCompoundorAddress = "0xbDd1D443118554fEb151406622a3B586992b49D3"
-const multiCompoundor = new ethers.Contract(multiCompoundorAddress, MULTI_RAW.abi, provider)
+const multiCompoundorAddress = config.getConfig(exchange, network, "multiCompoundorAddress")
+const useMultiCompoundor = !!multiCompoundorAddress
+const multiCompoundor = useMultiCompoundor ? new ethers.Contract(multiCompoundorAddress, MULTI_RAW.abi, provider) : null
 
 const factory = new ethers.Contract(factoryAddress, FACTORY_RAW.abi, provider)
 const npm = new ethers.Contract(npmAddress, NPM_RAW.abi, provider)
@@ -122,8 +69,8 @@ let lastTxNonce = null
 let errorCount = 0
 let compoundErrorCount = 0
 
-const graphApiUrl = network == "evmos" ? `https://subgraph.satsuma-prod.com/${process.env.SATSUMA_KEY}/revertfinance/compoundor-evmos/api` : `https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-${network}` 
-const uniswapGraphApiUrl = network == "evmos" ? `https://subgraph.satsuma-prod.com/${process.env.SATSUMA_KEY}/revertfinance/uniswap-v3-evmos/api` : `https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-${network}`
+const graphApiUrl = config.getConfig(exchange, network, "compoundor-subgraph")
+const uniswapGraphApiUrl = config.getConfig(exchange, network, "subgraph")
 
 async function getPositionValue(id) {
 
@@ -179,7 +126,7 @@ async function updateTrackedPositions() {
 async function checkBalances() {
     try {
         const balance = await provider.getBalance(signer.address);
-        if (balance.lt(lowAlertBalances[network])) {
+        if (balance.lt(lowAlertBalance)) {
             await sendDiscordAlert(`LOW BALANCE on ${network} ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol}`)
         }
     } catch (err) {
@@ -503,7 +450,7 @@ async function doMultiCompound(positions, doSwap, rewardConversion) {
                 updateTrackedPosition(pos.nftId, BigNumber.from(0), pos.gasLimit)
             }
 
-            await waitWithTimeout(tx, txWaitMs[network])
+            await waitWithTimeout(tx, txWaitMs)
 
             const msg = `Multi-Compounded ${nftIds.length} positions on ${network} ${doSwap ? "" : "non-"}swapping and converting to ${rewardConversion == 1 ? "TOKEN0" : "TOKEN1"}`
             console.log(msg)
@@ -586,11 +533,11 @@ async function autoCompoundPositions(runNumber = 0) {
                                 lastTxHash = tx.hash
                                 lastTxNonce = tx.nonce
 
-                                await waitWithTimeout(tx, txWaitMs[network])
+                                await waitWithTimeout(tx, txWaitMs)
 
                                 compoundErrorCount = 0
 
-                                await sendDiscordInfo(`Compounded position ${nftId} on ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
+                                await sendDiscordInfo(`Compounded position ${nftId} on ${exchange} ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
 
                                 console.log("Autocompounded position", nftId, tx.hash)
                                 updateTrackedPosition(nftId, result.gains, result.gasLimit)
