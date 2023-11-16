@@ -100,7 +100,7 @@ async function getPositions() {
 async function updateTrackedPositions() {
     try {
         const nftIds = await getPositions()
-        for (const nftId of nftIds.slice(0, 5)) {
+        for (const nftId of nftIds) {
             if (!trackedPositions[nftId]) {
                 await addTrackedPosition(nftId)
             }
