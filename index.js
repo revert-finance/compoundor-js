@@ -43,12 +43,6 @@ const preferedRewardToken = [nativeTokenAddress, config.getConfig(exchange, netw
 const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
 const mainnetProvider = new ethers.providers.JsonRpcProvider(process.env.MAINNET_RPC_URL)
 
-// special gas price handling for polygon
-if (network === "polygon") {
-    const { createGetGasPrice } = require('./lib/polygongastracker');
-    provider.getGasPrice = createGetGasPrice('rapid')
-}
-
 const contractAddress = config.getConfig(exchange, network, "contractAddress")
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)
 
@@ -106,7 +100,7 @@ async function getPositions() {
 async function updateTrackedPositions() {
     try {
         const nftIds = await getPositions()
-        for (const nftId of nftIds) {
+        for (const nftId of nftIds.slice(0, 5)) {
             if (!trackedPositions[nftId]) {
                 await addTrackedPosition(nftId)
             }
