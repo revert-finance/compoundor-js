@@ -349,7 +349,11 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
     }
 }
 
-async function getGasPrice() {
+async function getGasPrice(isEstimation) {
+    if ((network === "optimism" || network === "base") && isEstimation) {
+        const divisor = network === "optimism" ? 191 : 61
+        return (await mainnetProvider.getGasPrice()).div(divisor) // TODO optimism/base estimation - for autocompound call - good enough for now
+    }
     return await provider.getGasPrice()
 }
 
@@ -365,11 +369,13 @@ async function createTxParams(gasLimit, gasPrice) {
     // add a bit of extra gaslimit
     const params = { gasLimit: gasLimit.mul(11).div(10) }
 
-    if (network == "mainnet" || network == "optimism" || network == "base") {
+    if (network == "mainnet") {
         // mainnet EIP-1559 handling
         const feeData = await provider.getFeeData()
         params.maxFeePerGas = feeData.maxFeePerGas
         params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
+    } else if (network == "optimism" || network == "base") {
+        params.gasPrice = await getGasPrice(false)
     } else {
         params.gasPrice = gasPrice
     }
@@ -401,7 +407,7 @@ async function doMultiCompound(positions, doSwap, rewardConversion) {
         const chunk = positions.slice(i, i + chunkSize)
 
         const totalGains = chunk.reduce((a, c) => a.add(c.gains), BigNumber.from(0))
-        const gasPrice = await getGasPrice()
+        const gasPrice = await getGasPrice(true)
         const gasLimit = chunk.reduce((a, c) => a.add(c.gasLimit), BigNumber.from(0))
 
         // TODO add factor for cost estimating gas limit depending on position count - average for now
@@ -451,7 +457,7 @@ async function autoCompoundPositions(runNumber = 0) {
         const tokenPriceCache = {}
         const multiCompoundable = []
 
-        let gasPrice = await getGasPrice()
+        let gasPrice = await getGasPrice(true)
         console.log("Run", runNumber, "Current gas price", gasPrice.toString())
 
         for (const nftId of Object.keys(trackedPositions)) {
@@ -491,7 +497,7 @@ async function autoCompoundPositions(runNumber = 0) {
 
                     // update gas price to latest
                     if (!useMultiCompoundor) {
-                        gasPrice = await getGasPrice()
+                        gasPrice = await getGasPrice(true)
                     }
 
                     // try with and without swap
