@@ -21,7 +21,6 @@ const forceCheckInterval = 60000 * 60 * 6 // force check each 6 hours
 const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
-const minMultiGainCostPercent = BigNumber.from(process.env.MULTI_COMPOUND_PERCENTAGE || "1000")
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(5000000)
 
@@ -349,11 +348,7 @@ async function calculateCostAndGains(nftId, rewardConversion, withdrawReward, do
     }
 }
 
-async function getGasPrice(isEstimation) {
-    if ((network === "optimism" || network === "base") && isEstimation) {
-        const divisor = network === "optimism" ? 191 : 61
-        return (await mainnetProvider.getGasPrice()).div(divisor) // TODO optimism/base estimation - for autocompound call - good enough for now
-    }
+async function getGasPrice() {
     return await provider.getGasPrice()
 }
 
@@ -374,8 +369,6 @@ async function createTxParams(gasLimit, gasPrice) {
         const feeData = await provider.getFeeData()
         params.maxFeePerGas = feeData.maxFeePerGas
         params.maxPriorityFeePerGas = feeData.maxPriorityFeePerGas
-    } else if (network == "optimism" || network == "base") {
-        params.gasPrice = await getGasPrice(false)
     } else {
         params.gasPrice = gasPrice
     }
@@ -407,48 +400,43 @@ async function doMultiCompound(positions, doSwap, rewardConversion) {
         const chunk = positions.slice(i, i + chunkSize)
 
         const totalGains = chunk.reduce((a, c) => a.add(c.gains), BigNumber.from(0))
-        const gasPrice = await getGasPrice(true)
+        const gasPrice = await getGasPrice()
         const gasLimit = chunk.reduce((a, c) => a.add(c.gasLimit), BigNumber.from(0))
 
-        // TODO add factor for cost estimating gas limit depending on position count - average for now
-        const estimatingGasLimit = gasLimit.div(chunk.length)
+        const params = await createTxParams(gasLimit, gasPrice)
+        const nftIds = chunk.map(x => x.nftId)
 
-        if (isReady(totalGains, gasPrice.mul(estimatingGasLimit), minMultiGainCostPercent)) {
-            const params = await createTxParams(gasLimit, gasPrice)
-            const nftIds = chunk.map(x => x.nftId)
+        compoundErrorCount++
 
-            compoundErrorCount++
-
-            let tx;
-            if (doSwap) {
-                if (rewardConversion == 1) {
-                    tx = await multiCompoundor.connect(signer).runConv0Swap(nftIds, params)
-                } else {
-                    tx = await multiCompoundor.connect(signer).runConv1Swap(nftIds, params)
-                }
+        let tx;
+        if (doSwap) {
+            if (rewardConversion == 1) {
+                tx = await multiCompoundor.connect(signer).runConv0Swap(nftIds, params)
             } else {
-                if (rewardConversion == 1) {
-                    tx = await multiCompoundor.connect(signer).runConv0NoSwap(nftIds, params)
-                } else {
-                    tx = await multiCompoundor.connect(signer).runConv1NoSwap(nftIds, params)
-                }
+                tx = await multiCompoundor.connect(signer).runConv1Swap(nftIds, params)
             }
-
-            compoundErrorCount = 0
-
-            lastTxHash = tx.hash
-            lastTxNonce = tx.nonce
-
-            for (const pos of chunk) {
-                await sendDiscordInfo(`Compounded position ${pos.nftId} on ${network} for ${ethers.utils.formatEther(pos.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${pos.nftId}`)
-                updateTrackedPosition(pos.nftId, BigNumber.from(0), pos.gasLimit)
+        } else {
+            if (rewardConversion == 1) {
+                tx = await multiCompoundor.connect(signer).runConv0NoSwap(nftIds, params)
+            } else {
+                tx = await multiCompoundor.connect(signer).runConv1NoSwap(nftIds, params)
             }
-
-            await waitWithTimeout(tx, txWaitMs)
-
-            const msg = `Multi-Compounded ${nftIds.length} positions on ${network} ${doSwap ? "" : "non-"}swapping and converting to ${rewardConversion == 1 ? "TOKEN0" : "TOKEN1"}`
-            console.log(msg)
         }
+
+        compoundErrorCount = 0
+
+        lastTxHash = tx.hash
+        lastTxNonce = tx.nonce
+
+        for (const pos of chunk) {
+            await sendDiscordInfo(`Compounded position ${pos.nftId} on ${network} for ${ethers.utils.formatEther(pos.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${pos.nftId}`)
+            updateTrackedPosition(pos.nftId, BigNumber.from(0), pos.gasLimit)
+        }
+
+        await waitWithTimeout(tx, txWaitMs)
+
+        const msg = `Multi-Compounded ${nftIds.length} positions on ${network} ${doSwap ? "" : "non-"}swapping and converting to ${rewardConversion == 1 ? "TOKEN0" : "TOKEN1"}`
+        console.log(msg)
     }
 }
 
@@ -457,7 +445,7 @@ async function autoCompoundPositions(runNumber = 0) {
         const tokenPriceCache = {}
         const multiCompoundable = []
 
-        let gasPrice = await getGasPrice(true)
+        let gasPrice = await getGasPrice()
         console.log("Run", runNumber, "Current gas price", gasPrice.toString())
 
         for (const nftId of Object.keys(trackedPositions)) {
@@ -497,7 +485,7 @@ async function autoCompoundPositions(runNumber = 0) {
 
                     // update gas price to latest
                     if (!useMultiCompoundor) {
-                        gasPrice = await getGasPrice(true)
+                        gasPrice = await getGasPrice()
                     }
 
                     // try with and without swap
