@@ -135,44 +135,44 @@ const config = {
             "factoryAddress": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
             "npmAddress": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
             "contractAddress": "0x5411894842e610c4d0f6ed4c232da689400f94a1",
-            "subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-mainnet",
-            "compoundor-subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-mainnet"
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/9fWsevEC9Yz4WdW9QyUvu2JXsxyXAxc1X4HaEkmyyc75`,
+            "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/9a4tXnJu1v5KFnJUinVBvGoE7bAE9pPW8hUC5myE5v3t`
         },
         "polygon": {
             "factoryAddress": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
             "npmAddress": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
             "contractAddress": "0x5411894842e610c4d0f6ed4c232da689400f94a1",
-            "subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-polygon",
-            "compoundor-subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-polygon"
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/HMcqgvDY6f4MpnRSJqUUsBPHePj8Hq3AxiDBfDUrWs15`,
+            "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/BsZnuQqE5CEmbfkD1HdcDoB9k7sR7jEZ63qM3CF3TDew`
         },
         "optimism": {
             "factoryAddress": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
             "npmAddress": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
             "contractAddress": "0x5411894842e610c4d0f6ed4c232da689400f94a1",
             "multiCompoundorAddress": "0xbDd1D443118554fEb151406622a3B586992b49D3",
-            "subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-optimism",
-            "compoundor-subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-optimism"
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/AUpZ47RTWDBpco7YTTffGyRkBJ2i26Ms8dQSkUdxPHGc`,
+            "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/GPm81PyNJkSx8oiQFm1UppW4tBHHXtNhNQQfhUmC4f54`
         },
         "arbitrum": {
             "factoryAddress": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
             "npmAddress": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
             "contractAddress": "0x5411894842e610c4d0f6ed4c232da689400f94a1",
-            "subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-arbitrum",
-            "compoundor-subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-arbitrum"
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/3V7ZY6muhxaQL5qvntX1CFXJ32W7BxXZTGTwmpH5J4t3`,
+            "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/AAHFozW6KF553DsmqZkY7SRNLngP3vgrTMig2oxmfmfh`
         },
         "bnb": {
             "factoryAddress": "0xdb1d10011ad0ff90774d0c6bb92e5c5c8b4461f7",
             "npmAddress": "0x7b8a01b39d58278b5de7e48c8449c9f4f5170613",
             "contractAddress": "0x98eC492942090364AC0736Ef1A741AE6C92ec790",
-            "subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-bnb",
-            "compoundor-subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-bnb"
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/G5MUbSBM7Nsrm9tH2tGQUiAF4SZDGf2qeo1xPLYjKr7K`,
+            "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/3LAyKe1ULM4nA3cUFRgWzY3U8wSMXSMyAHZLxzxrTZ2c`
         },
         "base": {
             "factoryAddress": "0x33128a8fc17869897dce68ed026d694621f6fdfd",
             "npmAddress": "0x03a520b32c04bf3beef7beb72e919cf822ed34f1",
             "contractAddress": "0x4a8c2bdf0d8d2473b985f869815d9caa36a57ee4",
-            "subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/uniswap-v3-base",
-            "compoundor-subgraph": "https://api.thegraph.com/subgraphs/name/revert-finance/compoundor-base"
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/GqzP4Xaehti8KSfQmv3ZctFSjnSUYZ4En5NRsiTbvZpz`,
+            "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/BbDEjMEp1gnWZpojp5B52HMG9ktaz4NbZzDq5sQ47VYQ`
         },
         "evmos": {
             "factoryAddress": "0xf544365e7065966f190155f629ce0182fc68eaa2",
@@ -187,8 +187,8 @@ const config = {
             "factoryAddress": "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865",
             "npmAddress": "0x46A15B0b27311cedF172AB29E4f4766fbE7F4364",
             "contractAddress": "0x317202b11add82232d06bc13892cd22e38d505d3",
-            "subgraph": `https://api.thegraph.com/subgraphs/name/revert-finance/pancakeswap-v3-bnb`,
-            "compoundor-subgraph": `https://api.thegraph.com/subgraphs/name/revert-finance/pancakeswap-v3-compoundor-bnb`
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/A1fvJWQLBeUAggX2WQTMm3FKjXTekNXo77ZySun4YN2m`,
+            "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/9WeMybf9o5fGpbKWFzrZz9dQi3YZ5VWrF5v3UyrWN4VP`
         }
     }
 }
