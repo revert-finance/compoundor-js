@@ -135,7 +135,7 @@ const config = {
             "factoryAddress": "0x1F98431c8aD98523631AE4a59f267346ea31F984",
             "npmAddress": "0xC36442b4a4522E871399CD717aBDD847Ab11FE88",
             "contractAddress": "0x5411894842e610c4d0f6ed4c232da689400f94a1",
-            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/9fWsevEC9Yz4WdW9QyUvu2JXsxyXAxc1X4HaEkmyyc75`,
+            "subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/8e4dRt4P4WHXnKbEq7STaQfU2g99WZ5S4w39f2PcUTjD`,
             "compoundor-subgraph": `https://gateway-arbitrum.network.thegraph.com/api/${process.env.GRAPH_API_KEY}/subgraphs/id/9a4tXnJu1v5KFnJUinVBvGoE7bAE9pPW8hUC5myE5v3t`
         },
         "polygon": {
