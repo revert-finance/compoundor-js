@@ -120,7 +120,7 @@ async function checkBalances() {
     try {
         const balance = await provider.getBalance(signer.address);
         if (balance.lt(lowAlertBalance)) {
-            await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol}`, process.env.process.env.DISCORD_CHANNEL_BALANCE)
+            await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol} on ${exchange !== "uniswap-v3" ? exchange + " " : ""} ${network} -> TOP UP ${signer.address}`, process.env.process.env.DISCORD_CHANNEL_BALANCE)
         }
     } catch (err) {
         console.log("Error in checkBalances", err)
@@ -440,6 +440,11 @@ async function doMultiCompound(positions, doSwap, rewardConversion) {
     }
 }
 
+function getRevertUrlForDiscord(id) {
+    const exchangeName = network === "evmos" ? "forge-position" : (exchange === "pancakeswap-v3" ? "pancake-position" : "uniswap-position")
+    return `<https://revert.finance/#/${exchangeName}/${network}/${id.toString()}>`
+}
+
 async function autoCompoundPositions(runNumber = 0) {
     try {
         const tokenPriceCache = {}
@@ -519,7 +524,7 @@ async function autoCompoundPositions(runNumber = 0) {
 
                                 compoundErrorCount = 0
 
-                                await sendDiscordInfo(`Compounded position ${nftId} on ${exchange} ${network} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol} - https://revert.finance/#/uniswap-position/${network}/${nftId}`)
+                                await sendDiscordInfo(`Compounded position ${getRevertUrlForDiscord(nftId)} for ${ethers.utils.formatEther(result.gains)} ${nativeTokenSymbol}`)
 
                                 console.log("Autocompounded position", nftId, tx.hash)
                                 updateTrackedPosition(nftId, result.gains, result.gasLimit)
