@@ -153,9 +153,12 @@ async function sendDiscordMessage(msg, channel) {
 async function addTrackedPosition(nftId) {
     try {
         const position = await npm.positions(nftId)
-        const value = position.liquidity.gt(0) ? await getPositionValue(nftId) : 0
-        console.log("Add tracked position", nftId, value)
-        trackedPositions[nftId] = { nftId, value, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
+        const owner = await npm.ownerOf(nftId)
+        if (owner.toLowerCase() === contractAddress.toLowerCase()) {
+            const value = position.liquidity.gt(0) ? await getPositionValue(nftId) : 0
+            console.log("Add tracked position", nftId, value)
+            trackedPositions[nftId] = { nftId, value, token0: position.token0.toLowerCase(), token1: position.token1.toLowerCase(), fee: position.fee, liquidity: position.liquidity, tickLower: position.tickLower, tickUpper: position.tickUpper }
+        }
     } catch (err) {
         console.log("Error adding position", nftId)
     }
