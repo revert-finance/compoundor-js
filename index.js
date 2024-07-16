@@ -62,6 +62,8 @@ let lastTxNonce = null
 let errorCount = 0
 let compoundErrorCount = 0
 
+let discordNonce = 0
+
 const graphApiUrl = config.getConfig(exchange, network, "compoundor-subgraph")
 const uniswapGraphApiUrl = config.getConfig(exchange, network, "subgraph")
 
@@ -138,13 +140,7 @@ async function sendDiscordAlert(msg) {
 
 async function sendDiscordMessage(msg, channel) {
     try {
-        const config = {
-            headers: {
-                'Content-Type': 'application/json',
-                "Authorization": `Bot ${process.env.DISCORD_BOT_TOKEN}`
-            }
-        }
-        await axios.post(`https://discordapp.com/api/channels/${channel}/messages`, { "content": msg }, config)
+        fs.writeFileSync(`../discord/${process.pid}_${new Date().getTime()}_${discordNonce++}.txt`, `${channel}:${msg}`)
     } catch (err) {
         console.log("Error sending to discord", err)
     }
