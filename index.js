@@ -1,6 +1,7 @@
-require('dotenv').config({ path: __dirname + "/.env" })
+require('dotenv').config()
 const ethers = require("ethers");
 const axios = require('axios');
+const fs = require('fs')
 
 const config = require('./config');
 
