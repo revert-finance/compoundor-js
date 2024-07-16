@@ -1,4 +1,4 @@
-require('dotenv').config()
+require('dotenv').config({ path: __dirname + "/.env" })
 const ethers = require("ethers");
 const axios = require('axios');
 
@@ -20,7 +20,7 @@ const secondCheckInterval = 60000 * 60 // second check after 60 minutes to estim
 const forceCheckInterval = 60000 * 60 * 6 // force check each 6 hours
 const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
 const updatePositionsInterval = 60000 // each minute load position list from the graph
-const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "125") // keep 25% after fees
+const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "100")
 const defaultGasLimit = BigNumber.from(500000)
 const maxGasLimit = BigNumber.from(5000000)
 
