@@ -40,8 +40,8 @@ const lowAlertBalance = config.getConfig(exchange, network, "lowAlertBalance")
 // order for reward token preference
 const preferedRewardToken = [nativeTokenAddress, config.getConfig(exchange, network, "weth"), config.getConfig(exchange, network, "usdc"), config.getConfig(exchange, network, "usdt"), config.getConfig(exchange, network, "dai")]
 
-const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
-const mainnetProvider = new ethers.providers.JsonRpcProvider(process.env.MAINNET_RPC_URL)
+const provider = new ethers.providers.JsonRpcProvider(process.env["RPC_URL_" + network.toUpperCase()])
+const mainnetProvider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL_MAINNET)
 
 const contractAddress = config.getConfig(exchange, network, "contractAddress")
 const contract = new ethers.Contract(contractAddress, CONTRACT_RAW.abi, provider)

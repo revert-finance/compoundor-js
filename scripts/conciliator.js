@@ -5,9 +5,10 @@ const axios = require('axios');
 const BigNumber = ethers.BigNumber
 
 const IERC20_ABI = require("../contracts/IERC20.json")
-const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL)
 
 const network = process.env.NETWORK
+const provider = new ethers.providers.JsonRpcProvider(process.env["RPC_URL_" + network.toUpperCase()])
+
 
 const contractAddress = network == "evmos" ? "0x013573fa9faf879db49855addf10653f46903419" : ("bnb" ? "0x98eC492942090364AC0736Ef1A741AE6C92ec790" : "0x5411894842e610c4d0f6ed4c232da689400f94a1")
 
