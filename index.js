@@ -123,7 +123,7 @@ async function checkBalances() {
     try {
         const balance = await provider.getBalance(signer.address);
         if (balance.lt(lowAlertBalance)) {
-            await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol} on ${exchange !== "uniswap-v3" ? exchange + " " : ""} ${network} -> TOP UP ${signer.address}`, process.env.process.env.DISCORD_CHANNEL_BALANCE)
+            await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol} on ${exchange !== "uniswap-v3" ? exchange + " " : ""} ${network} -> TOP UP ${signer.address}`, process.env.DISCORD_CHANNEL_BALANCE)
         }
     } catch (err) {
         console.log("Error in checkBalances", err)
