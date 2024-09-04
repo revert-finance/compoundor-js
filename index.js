@@ -19,7 +19,7 @@ const whaleInterval = 60000 * 5 // whales are checked every 5 minutes
 const checkInterval = 60000 // quick check each minute
 const secondCheckInterval = 60000 * 60 // second check after 60 minutes to estimate fees
 const forceCheckInterval = 60000 * 60 * 6 // force check each 6 hours
-const checkBalancesInterval = 60000 * 60 * 4 // check balances each 4 hours
+const checkBalancesInterval = 60000 * 10 // check balances each 10 minutes
 const updatePositionsInterval = 60000 // each minute load position list from the graph
 const minGainCostPercent = BigNumber.from(process.env.COMPOUND_PERCENTAGE || "100")
 const defaultGasLimit = BigNumber.from(500000)
@@ -64,6 +64,7 @@ let errorCount = 0
 let compoundErrorCount = 0
 
 let discordNonce = 0
+let lowAlertBalancesSent = false
 
 const graphApiUrl = config.getConfig(exchange, network, "compoundor-subgraph")
 const uniswapGraphApiUrl = config.getConfig(exchange, network, "subgraph")
@@ -123,7 +124,12 @@ async function checkBalances() {
     try {
         const balance = await provider.getBalance(signer.address);
         if (balance.lt(lowAlertBalance)) {
-            await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol} on ${exchange !== "uniswap-v3" ? exchange + " " : ""} ${network} -> TOP UP ${signer.address}`, process.env.DISCORD_CHANNEL_BALANCE)
+            if (!lowAlertBalancesSent) {
+                await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol} on ${exchange !== "uniswap-v3" ? exchange + " " : ""} ${network} -> TOP UP ${signer.address}`, process.env.DISCORD_CHANNEL_BALANCE)
+                lowAlertBalancesSent = true
+            }
+        } else {
+            lowAlertBalancesSent = false
         }
     } catch (err) {
         console.log("Error in checkBalances", err)
