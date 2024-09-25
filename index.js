@@ -64,7 +64,7 @@ let errorCount = 0
 let compoundErrorCount = 0
 
 let discordNonce = 0
-let lowAlertBalancesSent = false
+let noBalanceAlertSent = false
 
 const graphApiUrl = config.getConfig(exchange, network, "compoundor-subgraph")
 const uniswapGraphApiUrl = config.getConfig(exchange, network, "subgraph")
@@ -124,12 +124,9 @@ async function checkBalances() {
     try {
         const balance = await provider.getBalance(signer.address);
         if (balance.lt(lowAlertBalance)) {
-            if (!lowAlertBalancesSent) {
-                await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol} on ${exchange !== "uniswap-v3" ? exchange + " " : ""} ${network} -> TOP UP ${signer.address}`, process.env.DISCORD_CHANNEL_BALANCE)
-                lowAlertBalancesSent = true
-            }
+            await sendDiscordMessage(`LOW BALANCE for Old Compoundor Operator ${ethers.utils.formatEther(balance)} ${nativeTokenSymbol} on ${exchange !== "uniswap-v3" ? exchange + " " : ""} ${network} -> TOP UP ${signer.address}`, process.env.DISCORD_CHANNEL_BALANCE)
         } else {
-            lowAlertBalancesSent = false
+            noBalanceAlertSent = false
         }
     } catch (err) {
         console.log("Error in checkBalances", err)
@@ -144,6 +141,11 @@ async function sendDiscordInfo(msg) {
 async function sendDiscordAlert(msg) {
     await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL_ALERT)
 }
+
+async function sendDiscordAlertUrgent(msg) {
+    await sendDiscordMessage(msg, process.env.DISCORD_CHANNEL_ALERT_URGENT)
+}
+
 
 async function sendDiscordMessage(msg, channel) {
     try {
@@ -556,6 +558,12 @@ async function autoCompoundPositions(runNumber = 0) {
                 errorCount = 0
 
             } catch (err) {
+
+                if (!noBalanceAlertSent && err.reason === "insufficient funds for intrinsic transaction cost") {
+                    await sendDiscordAlertUrgent(`NO BALANCE for Operator on ${exchange !== "uniswap-v3" ? exchange + " " : ""}${network} -> TOP UP min ${ethers.utils.formatEther(lowAlertBalance)} ${nativeTokenSymbol} to ${signer.address}`)
+                    noBalanceAlertSent = true
+                }
+
                 errorCount++
                 console.log("Error during autocompound position", nftId, err)
 
